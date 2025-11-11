@@ -53,7 +53,7 @@ jobs:
   test:
     name: terraform provider acceptance tests
     needs: build
-    if: ${{ needs.build.outputs.has_flow_token == 'true' }}
+    if: ${{ vars.RUN_ACCEPTANCE_TESTS == 'true' && needs.build.outputs.has_flow_token == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
