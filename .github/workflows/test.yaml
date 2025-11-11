@@ -42,7 +42,6 @@ jobs:
 
   test:
     name: terraform provider acceptance tests
-    if: ${{ secrets.FLOW_TOKEN != '' }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -57,12 +56,29 @@ jobs:
         with:
           go-version-file: 'go.mod'
           cache: true
+      - id: check_token
+        run: |
+          if [ -n "${{ secrets.FLOW_TOKEN }}" ]; then
+            echo "HAS_FLOW_TOKEN=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_FLOW_TOKEN=false" >> "$GITHUB_ENV"
+          fi
+      - if: ${{ env.HAS_FLOW_TOKEN != 'true' }}
+        run: |
+          echo "Skipping acceptance tests because FLOW_TOKEN secret is not set."
+          exit 0
+      - name: skip acceptance tests
+        if: ${{ env.HAS_FLOW_TOKEN != 'true' }}
+        run: echo "Skipping acceptance tests because FLOW_TOKEN secret is not set."
       - uses: hashicorp/setup-terraform@v2
+        if: ${{ env.HAS_FLOW_TOKEN == 'true' }}
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
+        if: ${{ env.HAS_FLOW_TOKEN == 'true' }}
       - run: go test -v -cover ./...
+        if: ${{ env.HAS_FLOW_TOKEN == 'true' }}
         timeout-minutes: 10
         env:
           TF_ACC: "1"
