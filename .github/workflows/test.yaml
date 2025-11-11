@@ -16,6 +16,8 @@ jobs:
     name: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      has_flow_token: ${{ steps.detect_flow_token.outputs.value }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -24,6 +26,14 @@ jobs:
           cache: true
       - run: go mod download
       - run: go build -v .
+      - name: detect flow token
+        id: detect_flow_token
+        run: |
+          if [ -n "${{ secrets.FLOW_TOKEN }}" ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
 
   generate:
     name: generate docs
@@ -42,8 +52,8 @@ jobs:
 
   test:
     name: terraform provider acceptance tests
-    if: ${{ secrets.FLOW_TOKEN != '' }}
     needs: build
+    if: ${{ vars.RUN_ACCEPTANCE_TESTS == 'true' && needs.build.outputs.has_flow_token == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
