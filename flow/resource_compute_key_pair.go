@@ -96,7 +96,11 @@ func (c computeKeyPairResource) Create(ctx context.Context, request tfsdk.Create
 		PublicKey: config.PublicKey.Value,
 	}
 
-	keyPair, err := c.keyPairService.Create(ctx, create)
+	var keyPair compute.KeyPair
+	err := retryCreate(ctx, "create key pair", func() (err error) {
+		keyPair, err = c.keyPairService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create key pair: %s", err))
 		return
@@ -151,7 +155,9 @@ func (c computeKeyPairResource) Delete(ctx context.Context, request tfsdk.Delete
 		return
 	}
 
-	err := c.keyPairService.Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete key pair", func() error {
+		return c.keyPairService.Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete key pair: %s", err))
 		return

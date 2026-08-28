@@ -171,7 +171,11 @@ func (c computeServerResource) Create(ctx context.Context, request tfsdk.CreateR
 		CloudInit:        config.CloudInit.Value,
 	}
 
-	ordering, err := c.serverService.Create(ctx, create)
+	var ordering common.Ordering
+	err := retryCreate(ctx, "create server", func() (err error) {
+		ordering, err = c.serverService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create server: %s", err))
 		return
@@ -233,7 +237,11 @@ func (c computeServerResource) Update(ctx context.Context, request tfsdk.UpdateR
 		Name: config.Name.Value,
 	}
 
-	server, err := c.serverService.Update(ctx, int(state.ID.Value), update)
+	var server compute.Server
+	err := retry(ctx, "update server", func() (err error) {
+		server, err = c.serverService.Update(ctx, int(state.ID.Value), update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update server: %s", err))
 		return
@@ -251,7 +259,9 @@ func (c computeServerResource) Delete(ctx context.Context, request tfsdk.DeleteR
 		return
 	}
 
-	err := c.serverService.Delete(ctx, int(state.ID.Value), false)
+	err := retry(ctx, "delete server", func() error {
+		return c.serverService.Delete(ctx, int(state.ID.Value), false)
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete server: %s", err))
 		return

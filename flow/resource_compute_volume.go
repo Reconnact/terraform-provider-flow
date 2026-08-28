@@ -124,7 +124,11 @@ func (r computeVolumeResource) Create(ctx context.Context, request tfsdk.CreateR
 		SnapshotID: int(config.Snapshot.Value),
 	}
 
-	volume, err := r.volumeService.Create(ctx, create)
+	var volume compute.Volume
+	err := retryCreate(ctx, "create volume", func() (err error) {
+		volume, err = r.volumeService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create volume: %s", err))
 		return
@@ -205,7 +209,10 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 			Name: config.Name.Value,
 		}
 
-		volume, err = r.volumeService.Update(ctx, int(state.ID.Value), update)
+		err = retry(ctx, "update volume", func() (err error) {
+			volume, err = r.volumeService.Update(ctx, int(state.ID.Value), update)
+			return err
+		})
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update volume: %s", err))
 			return
@@ -223,7 +230,10 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 			Size: int(config.Size.Value),
 		}
 
-		volume, err = r.volumeService.Expand(ctx, int(state.ID.Value), expand)
+		err = retry(ctx, "expand volume", func() (err error) {
+			volume, err = r.volumeService.Expand(ctx, int(state.ID.Value), expand)
+			return err
+		})
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to expand volume: %s", err))
 			return
@@ -244,7 +254,9 @@ func (r computeVolumeResource) Delete(ctx context.Context, request tfsdk.DeleteR
 		return
 	}
 
-	err := r.volumeService.Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete volume", func() error {
+		return r.volumeService.Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete volume: %s", err))
 		return

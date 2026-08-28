@@ -134,7 +134,11 @@ func (c computeLoadBalancerMemberResource) Create(ctx context.Context, request t
 		Port:    int(config.Port.Value),
 	}
 
-	member, err := c.loadBalancerService.Pools(loadBalancerID).Members(poolID).Create(ctx, create)
+	var member compute.LoadBalancerMember
+	err := retryCreate(ctx, "create load balancer member", func() (err error) {
+		member, err = c.loadBalancerService.Pools(loadBalancerID).Members(poolID).Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create load balancer member: %s", err))
 		return
@@ -198,7 +202,9 @@ func (c computeLoadBalancerMemberResource) Delete(ctx context.Context, request t
 	poolID := int(state.PoolID.Value)
 	memberID := int(state.ID.Value)
 
-	err := c.loadBalancerService.Pools(loadBalancerID).Members(poolID).Delete(ctx, memberID)
+	err := retry(ctx, "delete load balancer member", func() error {
+		return c.loadBalancerService.Pools(loadBalancerID).Members(poolID).Delete(ctx, memberID)
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete load balancer member: %s", err))
 		return

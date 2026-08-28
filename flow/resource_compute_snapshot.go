@@ -105,7 +105,11 @@ func (r computeSnapshotResource) Create(ctx context.Context, request tfsdk.Creat
 		VolumeID: int(config.VolumeID.Value),
 	}
 
-	snapshot, err := r.snapshotService.Create(ctx, create)
+	var snapshot compute.Snapshot
+	err := retryCreate(ctx, "create snapshot", func() (err error) {
+		snapshot, err = r.snapshotService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create snapshot: %s", err))
 		return
@@ -179,7 +183,11 @@ func (r computeSnapshotResource) Update(ctx context.Context, request tfsdk.Updat
 		Name: config.Name.Value,
 	}
 
-	snapshot, err := r.snapshotService.Update(ctx, int(state.ID.Value), update)
+	var snapshot compute.Snapshot
+	err := retry(ctx, "update snapshot", func() (err error) {
+		snapshot, err = r.snapshotService.Update(ctx, int(state.ID.Value), update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update snapshot: %s", err))
 		return
@@ -199,7 +207,9 @@ func (r computeSnapshotResource) Delete(ctx context.Context, request tfsdk.Delet
 		return
 	}
 
-	err := r.snapshotService.Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete snapshot", func() error {
+		return r.snapshotService.Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete snapshot: %s", err))
 		return

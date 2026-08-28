@@ -100,7 +100,11 @@ func (c computeRouterRouteResource) Create(ctx context.Context, request tfsdk.Cr
 		NextHop:     config.NextHop.Value,
 	}
 
-	route, err := compute.NewRouteService(c.client, routerID).Create(ctx, create)
+	var route compute.Route
+	err := retryCreate(ctx, "create route", func() (err error) {
+		route, err = compute.NewRouteService(c.client, routerID).Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create route: %s", err))
 		return
@@ -155,7 +159,9 @@ func (c computeRouterRouteResource) Delete(ctx context.Context, request tfsdk.De
 	}
 
 	routerID := int(state.RouterID.Value)
-	err := compute.NewRouteService(c.client, routerID).Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete route", func() error {
+		return compute.NewRouteService(c.client, routerID).Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete route: %s", err))
 		return

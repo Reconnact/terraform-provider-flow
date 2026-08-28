@@ -220,7 +220,11 @@ func (c computeCertificateResource) Create(ctx context.Context, request tfsdk.Cr
 		PrivateKey:  config.PrivateKey.Value,
 	}
 
-	certificate, err := c.certificateService.Create(ctx, create)
+	var certificate compute.Certificate
+	err := retryCreate(ctx, "create certificate", func() (err error) {
+		certificate, err = c.certificateService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create certificate: %s", err))
 		return
@@ -276,7 +280,9 @@ func (c computeCertificateResource) Delete(ctx context.Context, request tfsdk.De
 		return
 	}
 
-	err := c.certificateService.Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete certificate", func() error {
+		return c.certificateService.Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete certificate: %s", err))
 		return

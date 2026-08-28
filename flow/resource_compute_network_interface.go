@@ -142,11 +142,17 @@ func (c computeNetworkInterfaceResource) Create(ctx context.Context, request tfs
 		PrivateIP: config.PrivateIP.Value,
 	}
 
-	iface, err := service.Create(ctx, create)
+	var iface compute.NetworkInterface
+	err := retryCreate(ctx, "create network interface", func() (err error) {
+		iface, err = service.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create network interface: %s", err))
 		return
 	}
+
+	ifaceID := iface.ID
 
 	if len(config.SecurityGroupIDs) != 0 {
 		update := compute.NetworkInterfaceSecurityGroupUpdate{
@@ -157,11 +163,18 @@ func (c computeNetworkInterfaceResource) Create(ctx context.Context, request tfs
 			update.SecurityGroupIDs[idx] = int(securityGroupID.Value)
 		}
 
-		iface, err = service.UpdateSecurityGroups(ctx, iface.ID, update)
+		err = retry(ctx, "update security groups", func() error {
+			updated, err := service.UpdateSecurityGroups(ctx, ifaceID, update)
+			if err != nil {
+				return err
+			}
+			iface = updated
+			return nil
+		})
 		if err != nil {
 			// delete the interface if we failed to update the security groups
 			// TODO: should we add a backoff here if the deletion fails?
-			_ = service.Delete(ctx, iface.ID)
+			_ = retry(ctx, "delete network interface", func() error { return service.Delete(ctx, ifaceID) })
 
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security groups: %s", err))
 			return
@@ -173,11 +186,18 @@ func (c computeNetworkInterfaceResource) Create(ctx context.Context, request tfs
 			Security: config.Security.Value,
 		}
 
-		iface, err = service.UpdateSecurity(ctx, iface.ID, update)
+		err = retry(ctx, "update network interface security", func() error {
+			updated, err := service.UpdateSecurity(ctx, ifaceID, update)
+			if err != nil {
+				return err
+			}
+			iface = updated
+			return nil
+		})
 		if err != nil {
 			// delete the interface if we failed to update the security
 			// TODO: should we add a backoff here if the deletion fails?
-			_ = service.Delete(ctx, iface.ID)
+			_ = retry(ctx, "delete network interface", func() error { return service.Delete(ctx, ifaceID) })
 
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update network interface security: %s", err))
 			return
@@ -248,7 +268,11 @@ func (c computeNetworkInterfaceResource) Update(ctx context.Context, request tfs
 			update.SecurityGroupIDs[idx] = int(securityGroupID.Value)
 		}
 
-		iface, err := service.UpdateSecurityGroups(ctx, ifaceID, update)
+		var iface compute.NetworkInterface
+		err := retry(ctx, "update security groups", func() (err error) {
+			iface, err = service.UpdateSecurityGroups(ctx, ifaceID, update)
+			return err
+		})
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security groups: %s", err))
 			return
@@ -262,7 +286,11 @@ func (c computeNetworkInterfaceResource) Update(ctx context.Context, request tfs
 			Security: config.Security.Value,
 		}
 
-		iface, err := service.UpdateSecurity(ctx, ifaceID, update)
+		var iface compute.NetworkInterface
+		err := retry(ctx, "update network interface security", func() (err error) {
+			iface, err = service.UpdateSecurity(ctx, ifaceID, update)
+			return err
+		})
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update network interface security: %s", err))
 			return
@@ -286,7 +314,9 @@ func (c computeNetworkInterfaceResource) Delete(ctx context.Context, request tfs
 	serverID := int(state.ServerID.Value)
 	ifaceID := int(state.ID.Value)
 
-	err := c.serverService.NetworkInterfaces(serverID).Delete(ctx, ifaceID)
+	err := retry(ctx, "delete network interface", func() error {
+		return c.serverService.NetworkInterfaces(serverID).Delete(ctx, ifaceID)
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete network interface: %s", err))
 		return

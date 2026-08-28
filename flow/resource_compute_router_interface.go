@@ -101,7 +101,11 @@ func (c computeRouterInterfaceResource) Create(ctx context.Context, request tfsd
 		PrivateIP: config.PrivateIP.Value,
 	}
 
-	routerInterface, err := compute.NewRouterInterfaceService(c.client, routerID).Create(ctx, create)
+	var routerInterface compute.RouterInterface
+	err := retryCreate(ctx, "create router interface", func() (err error) {
+		routerInterface, err = compute.NewRouterInterfaceService(c.client, routerID).Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create router interface: %s", err))
 		return
@@ -155,7 +159,9 @@ func (c computeRouterInterfaceResource) Delete(ctx context.Context, request tfsd
 	}
 
 	routerID := int(state.RouterID.Value)
-	err := compute.NewRouterInterfaceService(c.client, routerID).Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete router interface", func() error {
+		return compute.NewRouterInterfaceService(c.client, routerID).Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete router interface: %s", err))
 		return

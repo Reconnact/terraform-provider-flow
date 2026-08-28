@@ -88,7 +88,11 @@ func (c computeElasticIPResource) Create(ctx context.Context, request tfsdk.Crea
 		LocationID: int(config.LocationID.Value),
 	}
 
-	elasticIP, err := c.elasticIPService.Create(ctx, create)
+	var elasticIP compute.ElasticIP
+	err := retryCreate(ctx, "create elastic ip", func() (err error) {
+		elasticIP, err = c.elasticIPService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create elastic ip: %s", err))
 		return
@@ -138,7 +142,9 @@ func (c computeElasticIPResource) Delete(ctx context.Context, request tfsdk.Dele
 		return
 	}
 
-	err := c.elasticIPService.Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete elastic ip", func() error {
+		return c.elasticIPService.Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete elastic ip: %s", err))
 		return

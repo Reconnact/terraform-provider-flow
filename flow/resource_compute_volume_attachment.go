@@ -98,7 +98,10 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request tfs
 		InstanceID: int(config.ServerID.Value),
 	}
 
-	volume, err = service.Attach(ctx, int(config.VolumeID.Value), attach)
+	err = retry(ctx, "attach volume", func() (err error) {
+		volume, err = service.Attach(ctx, int(config.VolumeID.Value), attach)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to attach volume: %s", err))
 		return
@@ -147,7 +150,9 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request tfs
 	}
 
 	// detach the volume from the current server
-	err := compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.Value), int(state.ServerID.Value))
+	err := retry(ctx, "detach volume", func() error {
+		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.Value), int(state.ServerID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach volume from current server: %s", err))
 		return
@@ -160,7 +165,11 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request tfs
 		InstanceID: int(config.ServerID.Value),
 	}
 
-	volume, err := compute.NewVolumeService(r.client).Attach(ctx, int(state.VolumeID.Value), attach)
+	var volume compute.Volume
+	err = retry(ctx, "attach volume", func() (err error) {
+		volume, err = compute.NewVolumeService(r.client).Attach(ctx, int(state.VolumeID.Value), attach)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to attach volume to new server: %s", err))
 		return
@@ -182,7 +191,9 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request tfs
 		return
 	}
 
-	err := compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.Value), int(state.ServerID.Value))
+	err := retry(ctx, "detach volume", func() error {
+		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.Value), int(state.ServerID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach volume: %s", err))
 		return

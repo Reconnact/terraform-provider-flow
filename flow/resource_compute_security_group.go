@@ -87,7 +87,11 @@ func (c computeSecurityGroupResource) Create(ctx context.Context, request tfsdk.
 		LocationID: int(config.LocationID.Value),
 	}
 
-	securityGroup, err := c.securityGroupService.Create(ctx, create)
+	var securityGroup compute.SecurityGroup
+	err := retryCreate(ctx, "create security group", func() (err error) {
+		securityGroup, err = c.securityGroupService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create security group: %s", err))
 		return
@@ -139,7 +143,11 @@ func (c computeSecurityGroupResource) Update(ctx context.Context, request tfsdk.
 		Name: config.Name.Value,
 	}
 
-	securityGroup, err := c.securityGroupService.Update(ctx, int(state.ID.Value), update)
+	var securityGroup compute.SecurityGroup
+	err := retry(ctx, "update security group", func() (err error) {
+		securityGroup, err = c.securityGroupService.Update(ctx, int(state.ID.Value), update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security group: %s", err))
 		return
@@ -159,7 +167,9 @@ func (c computeSecurityGroupResource) Delete(ctx context.Context, request tfsdk.
 		return
 	}
 
-	err := c.securityGroupService.Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete security group", func() error {
+		return c.securityGroupService.Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group: %s", err))
 		return

@@ -272,7 +272,11 @@ func (c computeLoadBalancerPoolResource) Create(ctx context.Context, request tfs
 		HealthCheck:          healthCheck,
 	}
 
-	pool, err := c.loadBalancerService.Pools(loadBalancerID).Create(ctx, create)
+	var pool compute.LoadBalancerPool
+	err := retryCreate(ctx, "create load balancer pool", func() (err error) {
+		pool, err = c.loadBalancerService.Pools(loadBalancerID).Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create load balancer pool: %s", err))
 		return
@@ -344,7 +348,11 @@ func (c computeLoadBalancerPoolResource) Update(ctx context.Context, request tfs
 		HealthCheck:          healthCheck,
 	}
 
-	pool, err := c.loadBalancerService.Pools(loadBalancerID).Update(ctx, poolID, update)
+	var pool compute.LoadBalancerPool
+	err := retry(ctx, "update load balancer pool", func() (err error) {
+		pool, err = c.loadBalancerService.Pools(loadBalancerID).Update(ctx, poolID, update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update load balancer pool: %s", err))
 		return
@@ -373,7 +381,9 @@ func (c computeLoadBalancerPoolResource) Delete(ctx context.Context, request tfs
 	loadBalancerID := int(state.LoadBalancerID.Value)
 	poolID := int(state.ID.Value)
 
-	err := c.loadBalancerService.Pools(loadBalancerID).Delete(ctx, poolID)
+	err := retry(ctx, "delete load balancer pool", func() error {
+		return c.loadBalancerService.Pools(loadBalancerID).Delete(ctx, poolID)
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete load balancer pool: %s", err))
 		return

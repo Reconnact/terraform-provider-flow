@@ -104,7 +104,11 @@ func (c computeElasticIPServerAttachmentResource) Create(ctx context.Context, re
 		NetworkInterfaceID: int(config.NetworkInterfaceID.Value),
 	}
 
-	elasticIP, err := compute.NewServerElasticIPService(c.client, serverID).Attach(ctx, attach)
+	var elasticIP compute.ElasticIP
+	err := retry(ctx, "attach elastic ip", func() (err error) {
+		elasticIP, err = compute.NewServerElasticIPService(c.client, serverID).Attach(ctx, attach)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to attach elastic ip: %s", err))
 		return
@@ -161,7 +165,9 @@ func (c computeElasticIPServerAttachmentResource) Delete(ctx context.Context, re
 		return
 	}
 
-	err := compute.NewServerElasticIPService(c.client, int(state.ServerID.Value)).Detach(ctx, int(state.ElasticIPID.Value))
+	err := retry(ctx, "detach elastic ip", func() error {
+		return compute.NewServerElasticIPService(c.client, int(state.ServerID.Value)).Detach(ctx, int(state.ElasticIPID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach elastic ip: %s", err))
 		return

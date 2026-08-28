@@ -198,7 +198,11 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request tfsdk.Cre
 		create.AttachExternalIP = false
 	}
 
-	ordering, err := k.clusterService.Create(ctx, create)
+	var ordering common.Ordering
+	err := retryCreate(ctx, "create cluster", func() (err error) {
+		ordering, err = k.clusterService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create cluster: %s", err))
 		return
@@ -264,7 +268,10 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 			Name: config.Name.Value,
 		}
 
-		_, err := k.clusterService.Update(ctx, int(state.ID.Value), update)
+		err := retry(ctx, "update cluster", func() (err error) {
+			_, err = k.clusterService.Update(ctx, int(state.ID.Value), update)
+			return err
+		})
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update cluster: %s", err))
 			return
@@ -277,7 +284,10 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 			// TODO configuration options
 		}
 
-		_, err := k.clusterService.UpdateConfiguration(ctx, int(state.ID.Value), update)
+		err := retry(ctx, "update cluster configuration", func() (err error) {
+			_, err = k.clusterService.UpdateConfiguration(ctx, int(state.ID.Value), update)
+			return err
+		})
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to change cluster configuration: %s", err))
 			return
@@ -292,7 +302,10 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 			},
 		}
 
-		_, err := k.clusterService.UpdateFlavor(ctx, int(state.ID.Value), update)
+		err := retry(ctx, "update cluster flavor", func() (err error) {
+			_, err = k.clusterService.UpdateFlavor(ctx, int(state.ID.Value), update)
+			return err
+		})
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to change cluster flavor: %s", err))
 			return
@@ -319,7 +332,9 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request tfsdk.Del
 		return
 	}
 
-	err := k.clusterService.Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete cluster", func() error {
+		return k.clusterService.Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete router: %s", err))
 		return

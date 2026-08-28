@@ -253,7 +253,11 @@ func (c computeSecurityGroupRuleResource) Create(ctx context.Context, request tf
 		create.ICMPCode = int(config.ICMP.Code.Value)
 	}
 
-	rule, err := c.securityGroupService.Rules(securityGroupID).Create(ctx, create)
+	var rule compute.SecurityGroupRule
+	err := retryCreate(ctx, "create security group rule", func() (err error) {
+		rule, err = c.securityGroupService.Rules(securityGroupID).Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create security group rule: %s", err))
 		return
@@ -331,7 +335,11 @@ func (c computeSecurityGroupRuleResource) Update(ctx context.Context, request tf
 		update.ICMPCode = int(config.ICMP.Code.Value)
 	}
 
-	rule, err := c.securityGroupService.Rules(securityGroupID).Update(ctx, ruleID, update)
+	var rule compute.SecurityGroupRule
+	err := retry(ctx, "update security group rule", func() (err error) {
+		rule, err = c.securityGroupService.Rules(securityGroupID).Update(ctx, ruleID, update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security group rule: %s", err))
 		return
@@ -354,7 +362,9 @@ func (c computeSecurityGroupRuleResource) Delete(ctx context.Context, request tf
 	securityGroupID := int(state.SecurityGroupID.Value)
 	ruleID := int(state.ID.Value)
 
-	err := c.securityGroupService.Rules(securityGroupID).Delete(ctx, ruleID)
+	err := retry(ctx, "delete security group rule", func() error {
+		return c.securityGroupService.Rules(securityGroupID).Delete(ctx, ruleID)
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group rule: %s", err))
 		return

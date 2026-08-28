@@ -117,7 +117,11 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request tfsdk.C
 		PrivateIP:        config.PrivateIP.Value,
 	}
 
-	ordering, err := c.loadBalancerService.Create(ctx, create)
+	var ordering common.Ordering
+	err := retryCreate(ctx, "create load balancer", func() (err error) {
+		ordering, err = c.loadBalancerService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create load balancer: %s", err))
 		return
@@ -182,7 +186,11 @@ func (c computeLoadBalancerResource) Update(ctx context.Context, request tfsdk.U
 		Name: config.Name.Value,
 	}
 
-	loadBalancer, err := c.loadBalancerService.Update(ctx, int(state.ID.Value), update)
+	var loadBalancer compute.LoadBalancer
+	err := retry(ctx, "update load balancer", func() (err error) {
+		loadBalancer, err = c.loadBalancerService.Update(ctx, int(state.ID.Value), update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update load balancer: %s", err))
 		return
@@ -200,7 +208,9 @@ func (c computeLoadBalancerResource) Delete(ctx context.Context, request tfsdk.D
 		return
 	}
 
-	err := c.loadBalancerService.Delete(ctx, int(state.ID.Value))
+	err := retry(ctx, "delete load balancer", func() error {
+		return c.loadBalancerService.Delete(ctx, int(state.ID.Value))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete load balancer: %s", err))
 		return
