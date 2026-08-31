@@ -138,7 +138,8 @@ func (p *provider) Configure(ctx context.Context, request tfsdk.ConfigureProvide
 		goclient.WithUserAgent(fmt.Sprintf("terraform-provider-flow/%s", p.version)),
 
 		goclient.WithHTTPClientOption(func(c *http.Client) {
-			c.Transport = logTransport{base: c.Transport}
+			// the read retry sits outside the log transport so every attempt is traced
+			c.Transport = readRetryTransport{base: logTransport{base: c.Transport}}
 		}),
 	)
 
