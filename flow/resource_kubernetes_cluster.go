@@ -3,8 +3,10 @@ package flow
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/flowswiss/goclient/common"
+	"github.com/flowswiss/goclient/compute"
 	"github.com/flowswiss/goclient/kubernetes"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -214,9 +216,9 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request tfsdk.Cre
 		return
 	}
 
-	cluster, err := k.clusterService.Get(ctx, order.Product.ID)
+	cluster, err := k.waitForClusterReady(ctx, order.Product.ID)
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get cluster: %s", err))
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be ready: %s", err))
 		return
 	}
 
@@ -264,6 +266,8 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 	}
 
 	if config.Name.Value != state.Name.Value {
+		// no unlock wait here — the name update is not guarded by the action
+		// lock (ClusterHandler::updateCluster), unlike configuration and flavor
 		update := kubernetes.ClusterUpdate{
 			Name: config.Name.Value,
 		}
@@ -279,6 +283,11 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 	}
 
 	if config.VersionID.Value != state.VersionID.Value {
+		if _, err := k.waitForClusterUnlocked(ctx, int(state.ID.Value)); err != nil {
+			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be unlocked: %s", err))
+			return
+		}
+
 		update := kubernetes.ClusterConfiguration{
 			VersionID: int(config.VersionID.Value),
 			// TODO configuration options
@@ -295,6 +304,11 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 	}
 
 	if config.NodeCount.Value != state.NodeCount.Value || config.NodeProductID.Value != state.NodeProductID.Value {
+		if _, err := k.waitForClusterUnlocked(ctx, int(state.ID.Value)); err != nil {
+			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be unlocked: %s", err))
+			return
+		}
+
 		update := kubernetes.ClusterUpdateFlavor{
 			Worker: kubernetes.ClusterWorkerUpdate{
 				ProductID: int(config.NodeProductID.Value),
@@ -312,9 +326,9 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 		}
 	}
 
-	cluster, err := k.clusterService.Get(ctx, int(state.ID.Value))
+	cluster, err := k.waitForClusterUnlocked(ctx, int(state.ID.Value))
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get cluster: %s", err))
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be unlocked: %s", err))
 		return
 	}
 
@@ -336,9 +350,57 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request tfsdk.Del
 		return k.clusterService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete router: %s", err))
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete cluster: %s", err))
 		return
 	}
+
+	if err := k.waitForClusterGone(ctx, int(state.ID.Value)); err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster deletion: %s", err))
+		return
+	}
+}
+
+// the create order succeeds while the cluster is still provisioning — until it
+// is unlocked and healthy, any update is refused with "currently busy" (400)
+func (k kubernetesClusterResource) waitForClusterReady(ctx context.Context, clusterID int) (cluster kubernetes.Cluster, err error) {
+	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be ready", clusterID), func(ctx context.Context) (bool, error) {
+		var err error
+		cluster, err = k.clusterService.Get(ctx, clusterID)
+		if err != nil {
+			return false, err
+		}
+		return !cluster.Locked && cluster.Status.ID == compute.ClusterStatusHealthy, nil
+	})
+
+	return cluster, err
+}
+
+// configuration and flavor updates run as an async action that keeps the
+// cluster locked after the call returns — any update in that window is refused
+// with "currently busy" (400)
+func (k kubernetesClusterResource) waitForClusterUnlocked(ctx context.Context, clusterID int) (cluster kubernetes.Cluster, err error) {
+	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be unlocked", clusterID), func(ctx context.Context) (bool, error) {
+		var err error
+		cluster, err = k.clusterService.Get(ctx, clusterID)
+		if err != nil {
+			return false, err
+		}
+		return !cluster.Locked, nil
+	})
+
+	return cluster, err
+}
+
+// cluster deletion is queued — the delete call returns while the cluster still
+// exists, and deleting the network is refused until it is gone
+func (k kubernetesClusterResource) waitForClusterGone(ctx context.Context, clusterID int) error {
+	return waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be gone", clusterID), func(ctx context.Context) (bool, error) {
+		_, err := k.clusterService.Get(ctx, clusterID)
+		if statusCode(err) == http.StatusNotFound {
+			return true, nil
+		}
+		return false, err
+	})
 }
 
 func (k kubernetesClusterResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {

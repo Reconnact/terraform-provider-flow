@@ -3,6 +3,7 @@ package flow
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
@@ -107,6 +108,12 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request tfs
 		return
 	}
 
+	volume, err = r.waitForVolumeStatus(ctx, "in use", int(config.VolumeID.Value), compute.VolumeStatusInUse)
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume attachment: %s", err))
+		return
+	}
+
 	var state computeVolumeAttachmentResourceData
 	state.FromEntity(volume)
 
@@ -158,6 +165,11 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request tfs
 		return
 	}
 
+	if _, err := r.waitForVolumeStatus(ctx, "available", int(state.VolumeID.Value), compute.VolumeStatusAvailable); err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume detachment: %s", err))
+		return
+	}
+
 	tflog.Trace(ctx, "volume attachment: volume detached from previous server")
 
 	// attach the volume to the new server
@@ -172,6 +184,12 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request tfs
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to attach volume to new server: %s", err))
+		return
+	}
+
+	volume, err = r.waitForVolumeStatus(ctx, "in use", int(state.VolumeID.Value), compute.VolumeStatusInUse)
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume attachment: %s", err))
 		return
 	}
 
@@ -198,6 +216,39 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request tfs
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach volume: %s", err))
 		return
 	}
+
+	if _, err := r.waitForVolumeStatus(ctx, "available", int(state.VolumeID.Value), compute.VolumeStatusAvailable); err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume detachment: %s", err))
+		return
+	}
+}
+
+// nova acks attach and detach while cinder is still working on it — the
+// backend waits only on the detach side, and only for 30 seconds; until the
+// volume settles, follow-up attach/expand/delete calls are refused
+func (r computeVolumeAttachmentResource) waitForVolumeStatus(ctx context.Context, status string, volumeID, wantStatus int) (volume compute.Volume, err error) {
+	err = waitFor(ctx, volumeSettleTimeout, defaultWaitInterval, fmt.Sprintf("volume %d to be %s", volumeID, status), func(ctx context.Context) (bool, error) {
+		var err error
+		volume, err = compute.NewVolumeService(r.client).Get(ctx, volumeID)
+		if err != nil {
+			// a volume that is gone counts as detached
+			if wantStatus == compute.VolumeStatusAvailable && statusCode(err) == http.StatusNotFound {
+				return true, nil
+			}
+			return false, err
+		}
+
+		switch volume.Status.ID {
+		case wantStatus:
+			return true, nil
+		case compute.VolumeStatusError:
+			return false, fmt.Errorf("volume %d is in error state", volumeID)
+		default:
+			return false, nil
+		}
+	})
+
+	return volume, err
 }
 
 func (r computeVolumeAttachmentResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {

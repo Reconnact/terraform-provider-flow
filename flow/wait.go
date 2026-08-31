@@ -1,0 +1,67 @@
+package flow
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+)
+
+// waiting for real state: the api marks an order as processed while the
+// resource is still coming up (a server keeps booting for seconds to minutes),
+// so callers poll the actual status with a deadline instead of relying on the
+// retry layer
+
+const (
+	defaultWaitInterval = 3 * time.Second
+	serverBootTimeout   = 10 * time.Minute
+	clusterWaitTimeout  = 20 * time.Minute
+	volumeSettleTimeout = 5 * time.Minute
+	// snapshot create and volume restore copy the data and scale with its size
+	snapshotTimeout = 30 * time.Minute
+)
+
+// waitFor polls check until it reports done, the deadline passes or the
+// context is cancelled — an error from check does not abort the wait, it only
+// surfaces in the timeout error if it never went away
+func waitFor(ctx context.Context, timeout, interval time.Duration, name string, check func(ctx context.Context) (bool, error)) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+
+	for attempt := 1; ; attempt++ {
+		done, err := check(ctx)
+		if err == nil && done {
+			return nil
+		}
+		if err != nil {
+			lastErr = err
+		}
+
+		if time.Now().Add(interval).After(deadline) {
+			if lastErr != nil {
+				return fmt.Errorf("timeout after %s waiting for %s (last error: %w)", timeout, name, lastErr)
+			}
+			return fmt.Errorf("timeout after %s waiting for %s", timeout, name)
+		}
+
+		tflog.Debug(ctx, "waiting", map[string]interface{}{
+			"for":     name,
+			"attempt": attempt,
+			"error":   errString(err),
+		})
+
+		select {
+		case <-time.After(interval):
+		case <-ctx.Done():
+			return fmt.Errorf("cancelled while waiting for %s: %w", name, ctx.Err())
+		}
+	}
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}

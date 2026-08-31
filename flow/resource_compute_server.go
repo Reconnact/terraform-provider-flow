@@ -187,9 +187,9 @@ func (c computeServerResource) Create(ctx context.Context, request tfsdk.CreateR
 		return
 	}
 
-	server, err := c.serverService.Get(ctx, order.Product.ID)
+	server, err := c.waitForServerRunning(ctx, order.Product.ID)
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get server: %s", err))
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for server to be running: %s", err))
 		return
 	}
 
@@ -266,6 +266,29 @@ func (c computeServerResource) Delete(ctx context.Context, request tfsdk.DeleteR
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete server: %s", err))
 		return
 	}
+}
+
+// the order is already processed while the server is still booting —
+// attaching volumes or network interfaces in that window is refused by the api
+func (c computeServerResource) waitForServerRunning(ctx context.Context, serverID int) (server compute.Server, err error) {
+	err = waitFor(ctx, serverBootTimeout, defaultWaitInterval, fmt.Sprintf("server %d to be running", serverID), func(ctx context.Context) (bool, error) {
+		var err error
+		server, err = c.serverService.Get(ctx, serverID)
+		if err != nil {
+			return false, err
+		}
+
+		switch server.Status.ID {
+		case compute.ServerStatusRunning:
+			return true, nil
+		case compute.ServerStatusError:
+			return false, fmt.Errorf("server %d is in error state", serverID)
+		default:
+			return false, nil
+		}
+	})
+
+	return server, err
 }
 
 func (c computeServerResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {

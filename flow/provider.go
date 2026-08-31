@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/flowswiss/goclient"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -225,33 +224,6 @@ func convertToLocalProviderType(p tfsdk.Provider) (prov *provider, diagnostics d
 	}
 
 	return
-}
-
-func waitForCondition(ctx context.Context, check func(ctx context.Context) (bool, diag.Diagnostics)) (diagnostics diag.Diagnostics) {
-	done, d := check(ctx)
-	diagnostics.Append(d...)
-	if done || diagnostics.HasError() {
-		return
-	}
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-
-		case <-ctx.Done():
-			diagnostics.AddError("Timeout", "Timeout while waiting for condition")
-			return
-		}
-
-		done, d = check(ctx)
-		diagnostics.Append(d...)
-		if done || diagnostics.HasError() {
-			return
-		}
-	}
 }
 
 type logTransport struct {

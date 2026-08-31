@@ -3,6 +3,7 @@ package flow
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -134,24 +135,23 @@ func (r computeVolumeResource) Create(ctx context.Context, request tfsdk.CreateR
 		return
 	}
 
+	tflog.Trace(ctx, "created volume", map[string]interface{}{
+		"id":   volume.ID,
+		"data": volume,
+	})
+
+	volume, err = r.waitForVolumeSettled(ctx, volume.ID, snapshotTimeout)
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume to settle: %s", err))
+		return
+	}
+
 	var state computeVolumeResourceData
 	state.FromEntity(volume)
 
 	// copy the restored snapshot property from the config. in the api we don't know anymore if there was a snapshot
 	// that has been restored.
 	state.Snapshot = config.Snapshot
-
-	tflog.Trace(ctx, "created volume", map[string]interface{}{
-		"id":   volume.ID,
-		"data": volume,
-	})
-
-	if volume.Status.ID == compute.VolumeStatusWorking {
-		// wait for the volume to be ready
-		waitForCondition(ctx, func(ctx context.Context) (bool, diag.Diagnostics) {
-			return r.waitForVolumeStatus(ctx, volume.ID)
-		})
-	}
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -238,6 +238,12 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to expand volume: %s", err))
 			return
 		}
+
+		volume, err = r.waitForVolumeSettled(ctx, int(state.ID.Value), volumeSettleTimeout)
+		if err != nil {
+			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume to settle: %s", err))
+			return
+		}
 	}
 
 	state.FromEntity(volume)
@@ -267,13 +273,26 @@ func (r computeVolumeResource) ImportState(ctx context.Context, request tfsdk.Im
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-func (r computeVolumeResource) waitForVolumeStatus(ctx context.Context, volumeID int) (done bool, diagnostics diag.Diagnostics) {
-	volume, err := r.volumeService.Get(ctx, volumeID)
-	if err != nil {
-		diagnostics.AddError("Client Error", fmt.Sprintf("unable to get volume: %s", err))
-		return
-	}
+// a restore or an expand leaves the volume in the working state while cinder
+// finishes the job — an attached volume settles to in-use, an unattached one
+// to available, and follow-up calls are refused until then
+func (r computeVolumeResource) waitForVolumeSettled(ctx context.Context, volumeID int, timeout time.Duration) (volume compute.Volume, err error) {
+	err = waitFor(ctx, timeout, defaultWaitInterval, fmt.Sprintf("volume %d to settle", volumeID), func(ctx context.Context) (bool, error) {
+		var err error
+		volume, err = r.volumeService.Get(ctx, volumeID)
+		if err != nil {
+			return false, err
+		}
 
-	done = volume.Status.ID != compute.VolumeStatusWorking
-	return
+		switch volume.Status.ID {
+		case compute.VolumeStatusAvailable, compute.VolumeStatusInUse:
+			return true, nil
+		case compute.VolumeStatusError:
+			return false, fmt.Errorf("volume %d is in error state", volumeID)
+		default:
+			return false, nil
+		}
+	})
+
+	return volume, err
 }
