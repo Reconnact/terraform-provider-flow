@@ -213,6 +213,10 @@ func (c computeServerResource) Read(ctx context.Context, request tfsdk.ReadResou
 
 	server, err := c.serverService.Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("server %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get server: %s", err))
 		return
 	}

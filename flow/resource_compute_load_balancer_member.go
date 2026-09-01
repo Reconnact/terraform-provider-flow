@@ -2,6 +2,7 @@ package flow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/flowswiss/goclient"
@@ -169,13 +170,21 @@ func (c computeLoadBalancerMemberResource) Read(ctx context.Context, request tfs
 
 	list, err := c.loadBalancerService.Pools(loadBalancerID).Members(poolID).List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("load balancer %d pool %d", loadBalancerID, poolID))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list load balancer members: %s", err))
 		return
 	}
 
 	member, err := filter.FindOne(state, list.Items)
 	if err != nil {
-		response.Diagnostics.AddError("Not Found", fmt.Sprintf("unable to find load balancer member: %s", err))
+		if errors.Is(err, filter.ErrNoResults) {
+			removeGone(ctx, response, fmt.Sprintf("load balancer member %d", state.ID.Value))
+			return
+		}
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to find load balancer member: %s", err))
 		return
 	}
 

@@ -133,7 +133,16 @@ func (r computeVolumeAttachmentResource) Read(ctx context.Context, request tfsdk
 
 	volume, err := compute.NewVolumeService(r.client).Get(ctx, int(state.VolumeID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("volume %d", state.VolumeID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get volume: %s", err))
+		return
+	}
+
+	if volume.AttachedTo.ID == 0 {
+		removeGone(ctx, response, fmt.Sprintf("attachment of volume %d", state.VolumeID.Value))
 		return
 	}
 

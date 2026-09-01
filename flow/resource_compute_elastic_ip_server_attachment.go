@@ -137,17 +137,31 @@ func (c computeElasticIPServerAttachmentResource) Read(ctx context.Context, requ
 
 	server, err := compute.NewServerService(c.client).Get(ctx, int(state.ServerID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("server %d", state.ServerID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get server: %s", err))
 		return
 	}
 
-	elasticIP, diagnostics := findComputeElasticIP(ctx, c.elasticIPService, int(state.ElasticIPID.Value))
-	response.Diagnostics.Append(diagnostics...)
-	if response.Diagnostics.HasError() {
+	elasticIP, found, err := findComputeElasticIP(ctx, c.elasticIPService, int(state.ElasticIPID.Value))
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+	if !found {
+		removeGone(ctx, response, fmt.Sprintf("elastic ip %d", state.ElasticIPID.Value))
 		return
 	}
 
 	state.FromEntity(server, elasticIP)
+
+	// no interface of the server carries the ip any more — detached outside terraform
+	if state.NetworkInterfaceID.Null {
+		removeGone(ctx, response, fmt.Sprintf("attachment of elastic ip %d to server %d", state.ElasticIPID.Value, state.ServerID.Value))
+		return
+	}
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)

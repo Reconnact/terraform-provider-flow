@@ -283,6 +283,10 @@ func (c computeSecurityGroupRuleResource) Read(ctx context.Context, request tfsd
 
 	list, err := c.securityGroupService.Rules(securityGroupID).List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("security group %d", securityGroupID))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security group rules: %s", err))
 		return
 	}
@@ -297,7 +301,7 @@ func (c computeSecurityGroupRuleResource) Read(ctx context.Context, request tfsd
 		}
 	}
 
-	response.Diagnostics.AddError("Not Found", fmt.Sprintf("security group rule %d could not be found", ruleID))
+	removeGone(ctx, response, fmt.Sprintf("security group rule %d", ruleID))
 }
 
 func (c computeSecurityGroupRuleResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {

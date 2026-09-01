@@ -242,6 +242,10 @@ func (k kubernetesClusterResource) Read(ctx context.Context, request tfsdk.ReadR
 
 	cluster, err := k.clusterService.Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("cluster %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get cluster: %s", err))
 		return
 	}

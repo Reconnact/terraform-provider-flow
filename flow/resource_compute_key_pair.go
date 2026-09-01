@@ -140,7 +140,7 @@ func (c computeKeyPairResource) Read(ctx context.Context, request tfsdk.ReadReso
 		}
 	}
 
-	response.Diagnostics.AddError("Not Found", fmt.Sprintf("key pair with id %d not found", state.ID.Value))
+	removeGone(ctx, response, fmt.Sprintf("key pair %d", state.ID.Value))
 }
 
 func (c computeKeyPairResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {

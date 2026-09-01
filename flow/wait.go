@@ -15,6 +15,10 @@ import (
 // so callers poll the actual status with a deadline instead of relying on the
 // retry layer
 
+// TODO: these deadlines are fixed defaults — per-resource `timeouts {}`
+// overrides come with terraform-plugin-framework-timeouts once the framework
+// is on 1.x; the waits then read their
+// deadline from the resource instead of the constant
 const (
 	defaultWaitInterval = 3 * time.Second
 	serverBootTimeout   = 10 * time.Minute

@@ -114,6 +114,10 @@ func (c computeSecurityGroupResource) Read(ctx context.Context, request tfsdk.Re
 
 	securityGroup, err := c.securityGroupService.Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("security group %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security groups: %s", err))
 		return
 	}

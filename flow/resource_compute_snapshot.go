@@ -145,6 +145,10 @@ func (r computeSnapshotResource) Read(ctx context.Context, request tfsdk.ReadRes
 
 	snapshot, err := r.snapshotService.Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("snapshot %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get snapshot: %s", err))
 		return
 	}

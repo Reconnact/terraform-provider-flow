@@ -145,6 +145,10 @@ func (c computeRouterResource) Read(ctx context.Context, request tfsdk.ReadResou
 
 	router, err := c.routerService.Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("router %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get router: %s", err))
 		return
 	}

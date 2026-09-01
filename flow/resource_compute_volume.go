@@ -169,6 +169,10 @@ func (r computeVolumeResource) Read(ctx context.Context, request tfsdk.ReadResou
 
 	volume, err := r.volumeService.Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("volume %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get volume: %s", err))
 		return
 	}

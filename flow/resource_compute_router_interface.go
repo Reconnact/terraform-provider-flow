@@ -129,6 +129,10 @@ func (c computeRouterInterfaceResource) Read(ctx context.Context, request tfsdk.
 	routerID := int(state.RouterID.Value)
 	list, err := compute.NewRouterInterfaceService(c.client, routerID).List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("router %d", routerID))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list router interfaces: %s", err))
 		return
 	}
@@ -143,7 +147,7 @@ func (c computeRouterInterfaceResource) Read(ctx context.Context, request tfsdk.
 		}
 	}
 
-	response.Diagnostics.AddError("Not Found", "router interface could not be found")
+	removeGone(ctx, response, fmt.Sprintf("router interface %d", state.ID.Value))
 }
 
 func (c computeRouterInterfaceResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {

@@ -265,7 +265,7 @@ func (c computeCertificateResource) Read(ctx context.Context, request tfsdk.Read
 		}
 	}
 
-	response.Diagnostics.AddError("Not Found", fmt.Sprintf("certificate with id %d not found", state.ID.Value))
+	removeGone(ctx, response, fmt.Sprintf("certificate %d", state.ID.Value))
 }
 
 func (c computeCertificateResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {

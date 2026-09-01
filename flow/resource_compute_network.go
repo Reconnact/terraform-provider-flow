@@ -200,6 +200,10 @@ func (c computeNetworkResource) Read(ctx context.Context, request tfsdk.ReadReso
 
 	network, err := c.networkService.Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("network %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get network: %s", err))
 		return
 	}

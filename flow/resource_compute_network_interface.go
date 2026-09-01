@@ -2,6 +2,7 @@ package flow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/flowswiss/goclient"
@@ -223,13 +224,21 @@ func (c computeNetworkInterfaceResource) Read(ctx context.Context, request tfsdk
 
 	list, err := c.serverService.NetworkInterfaces(serverID).List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("server %d", serverID))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list network interfaces: %s", err))
 		return
 	}
 
 	iface, err := filter.FindOne(state, list.Items)
 	if err != nil {
-		response.Diagnostics.AddError("Not Found", fmt.Sprintf("unable to find network interface: %s", err))
+		if errors.Is(err, filter.ErrNoResults) {
+			removeGone(ctx, response, fmt.Sprintf("network interface %d", state.ID.Value))
+			return
+		}
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to find network interface: %s", err))
 		return
 	}
 

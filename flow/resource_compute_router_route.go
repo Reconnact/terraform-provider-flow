@@ -129,6 +129,10 @@ func (c computeRouterRouteResource) Read(ctx context.Context, request tfsdk.Read
 
 	list, err := compute.NewRouteService(c.client, routerID).List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("router %d", routerID))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list routes: %s", err))
 		return
 	}
@@ -143,7 +147,7 @@ func (c computeRouterRouteResource) Read(ctx context.Context, request tfsdk.Read
 		}
 	}
 
-	response.Diagnostics.AddError("Not Found", fmt.Sprintf("route with id %d not found", state.ID.Value))
+	removeGone(ctx, response, fmt.Sprintf("route %d", state.ID.Value))
 }
 
 func (c computeRouterRouteResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {

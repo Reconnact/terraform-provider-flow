@@ -306,6 +306,10 @@ func (c computeLoadBalancerPoolResource) Read(ctx context.Context, request tfsdk
 
 	pool, err := c.loadBalancerService.Pools(loadBalancerID).Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("load balancer pool %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get load balancer pool: %s", err))
 		return
 	}

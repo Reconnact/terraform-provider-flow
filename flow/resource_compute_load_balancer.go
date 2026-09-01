@@ -156,6 +156,10 @@ func (c computeLoadBalancerResource) Read(ctx context.Context, request tfsdk.Rea
 
 	loadBalancer, err := c.loadBalancerService.Get(ctx, int(state.ID.Value))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("load balancer %d", state.ID.Value))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get load balancer: %s", err))
 		return
 	}

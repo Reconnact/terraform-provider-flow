@@ -118,9 +118,13 @@ func (c computeElasticIPResource) Read(ctx context.Context, request tfsdk.ReadRe
 		return
 	}
 
-	elasticIP, diagnostics := findComputeElasticIP(ctx, c.elasticIPService, int(state.ID.Value))
-	response.Diagnostics.Append(diagnostics...)
-	if response.Diagnostics.HasError() {
+	elasticIP, found, err := findComputeElasticIP(ctx, c.elasticIPService, int(state.ID.Value))
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+	if !found {
+		removeGone(ctx, response, fmt.Sprintf("elastic ip %d", state.ID.Value))
 		return
 	}
 
@@ -159,19 +163,17 @@ func (c computeElasticIPResource) ImportState(ctx context.Context, request tfsdk
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-func findComputeElasticIP(ctx context.Context, service compute.ElasticIPService, id int) (elasticIP compute.ElasticIP, diagnostics diag.Diagnostics) {
+func findComputeElasticIP(ctx context.Context, service compute.ElasticIPService, id int) (elasticIP compute.ElasticIP, found bool, err error) {
 	list, err := service.List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {
-		diagnostics.AddError("Client Error", fmt.Sprintf("unable to list elastic ips: %s", err))
-		return
+		return elasticIP, false, fmt.Errorf("unable to list elastic ips: %w", err)
 	}
 
 	for _, elasticIP = range list.Items {
 		if elasticIP.ID == id {
-			return
+			return elasticIP, true, nil
 		}
 	}
 
-	diagnostics.AddError("Not Found", fmt.Sprintf("unable to find elastic ip with id %d", id))
-	return
+	return compute.ElasticIP{}, false, nil
 }
