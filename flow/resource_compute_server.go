@@ -37,7 +37,7 @@ func (c *computeServerResourceData) FromEntity(server compute.Server) {
 	c.LocationID = types.Int64{Value: int64(server.Location.ID)}
 	c.ImageID = types.Int64{Value: int64(server.Image.ID)}
 	c.ProductID = types.Int64{Value: int64(server.Product.ID)}
-	c.KeyPairID = types.Int64{Value: int64(server.KeyPair.ID)}
+	c.KeyPairID = types.Int64{Null: server.KeyPair.ID == 0, Value: int64(server.KeyPair.ID)}
 
 	if len(server.Networks) != 0 {
 		network := server.Networks[0]
@@ -90,10 +90,12 @@ func (c computeServerResourceType) GetSchema(ctx context.Context) (tfsdk.Schema,
 			},
 			"network_id": {
 				Type:                types.Int64Type,
-				MarkdownDescription: "unique identifier of the initial network",
+				MarkdownDescription: "unique identifier of the initial network (the organisation's default network when omitted)",
 				Optional:            true,
+				Computed:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),
+					tfsdk.UseStateForUnknown(),
 				},
 			},
 			"private_ip": {
@@ -103,14 +105,17 @@ func (c computeServerResourceType) GetSchema(ctx context.Context) (tfsdk.Schema,
 				Computed:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),
+					tfsdk.UseStateForUnknown(),
 				},
 			},
 			"key_pair_id": {
 				Type:                types.Int64Type,
-				MarkdownDescription: "unique identifier of the key pair",
+				MarkdownDescription: "unique identifier of the key pair (linux images require one)",
 				Optional:            true,
+				Computed:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),
+					tfsdk.UseStateForUnknown(),
 				},
 			},
 			"password": {

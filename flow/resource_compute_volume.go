@@ -61,8 +61,12 @@ func (t computeVolumeResourceType) GetSchema(ctx context.Context) (tfsdk.Schema,
 
 			"name": {
 				Type:                types.StringType,
-				MarkdownDescription: "name of the volume",
+				MarkdownDescription: "name of the volume (assigned by the api when omitted)",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{
+					tfsdk.UseStateForUnknown(),
+				},
 			},
 			"size": {
 				Type:                types.Int64Type,
@@ -191,8 +195,8 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 		return
 	}
 
-	var config computeVolumeResourceData
-	diagnostics = request.Config.Get(ctx, &config)
+	var plan computeVolumeResourceData
+	diagnostics = request.Plan.Get(ctx, &plan)
 	response.Diagnostics.Append(diagnostics...)
 	if response.Diagnostics.HasError() {
 		return
@@ -204,15 +208,15 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 		return
 	}
 
-	if !config.Name.Equal(state.Name) {
+	if !plan.Name.Equal(state.Name) {
 		tflog.Debug(ctx, "volume name has changed: updating volume", map[string]interface{}{
 			"volume_id":      state.ID,
 			"previous_name":  state.Name,
-			"requested_name": config.Name,
+			"requested_name": plan.Name,
 		})
 
 		update := compute.VolumeUpdate{
-			Name: config.Name.Value,
+			Name: plan.Name.Value,
 		}
 
 		err = retry(ctx, "update volume", func() (err error) {
@@ -225,15 +229,15 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 		}
 	}
 
-	if !config.Size.Equal(state.Size) {
+	if !plan.Size.Equal(state.Size) {
 		tflog.Debug(ctx, "volume size has changed: expanding volume", map[string]interface{}{
 			"volume_id":      state.ID,
 			"previous_size":  state.Size,
-			"requested_size": config.Size,
+			"requested_size": plan.Size,
 		})
 
 		expand := compute.VolumeExpand{
-			Size: int(config.Size.Value),
+			Size: int(plan.Size.Value),
 		}
 
 		err = retry(ctx, "expand volume", func() (err error) {

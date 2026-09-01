@@ -119,6 +119,7 @@ func (k kubernetesClusterResourceType) GetSchema(ctx context.Context) (tfsdk.Sch
 				Computed:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),
+					tfsdk.UseStateForUnknown(),
 				},
 			},
 			"public_address": {
@@ -264,18 +265,18 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 		return
 	}
 
-	var config kubernetesClusterResourceData
-	diagnostics = request.Config.Get(ctx, &config)
+	var plan kubernetesClusterResourceData
+	diagnostics = request.Plan.Get(ctx, &plan)
 	response.Diagnostics.Append(diagnostics...)
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	if config.Name.Value != state.Name.Value {
+	if plan.Name.Value != state.Name.Value {
 		// no unlock wait here — the name update is not guarded by the action
 		// lock (ClusterHandler::updateCluster), unlike configuration and flavor
 		update := kubernetes.ClusterUpdate{
-			Name: config.Name.Value,
+			Name: plan.Name.Value,
 		}
 
 		err := retry(ctx, "update cluster", func() (err error) {
@@ -288,14 +289,14 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 		}
 	}
 
-	if config.VersionID.Value != state.VersionID.Value {
+	if !plan.VersionID.Unknown && plan.VersionID.Value != state.VersionID.Value {
 		if _, err := k.waitForClusterUnlocked(ctx, int(state.ID.Value)); err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be unlocked: %s", err))
 			return
 		}
 
 		update := kubernetes.ClusterConfiguration{
-			VersionID: int(config.VersionID.Value),
+			VersionID: int(plan.VersionID.Value),
 			// TODO configuration options
 		}
 
@@ -309,7 +310,7 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 		}
 	}
 
-	if config.NodeCount.Value != state.NodeCount.Value || config.NodeProductID.Value != state.NodeProductID.Value {
+	if plan.NodeCount.Value != state.NodeCount.Value || plan.NodeProductID.Value != state.NodeProductID.Value {
 		if _, err := k.waitForClusterUnlocked(ctx, int(state.ID.Value)); err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be unlocked: %s", err))
 			return
@@ -317,8 +318,8 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 
 		update := kubernetes.ClusterUpdateFlavor{
 			Worker: kubernetes.ClusterWorkerUpdate{
-				ProductID: int(config.NodeProductID.Value),
-				Count:     int(config.NodeCount.Value),
+				ProductID: int(plan.NodeProductID.Value),
+				Count:     int(plan.NodeCount.Value),
 			},
 		}
 

@@ -88,12 +88,16 @@ func (c computeNetworkInterfaceResourceType) GetSchema(ctx context.Context) (tfs
 				Computed:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),
+					tfsdk.UseStateForUnknown(),
 				},
 			},
 			"mac_address": {
 				Type:                types.StringType,
 				MarkdownDescription: "MAC address of the network interface",
 				Computed:            true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{
+					tfsdk.UseStateForUnknown(),
+				},
 			},
 
 			"security_group_ids": {

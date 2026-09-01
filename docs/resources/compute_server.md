@@ -25,8 +25,8 @@ description: |-
 ### Optional
 
 - `cloud_init` (String) cloud init script
-- `key_pair_id` (Number) unique identifier of the key pair
-- `network_id` (Number) unique identifier of the initial network
+- `key_pair_id` (Number) unique identifier of the key pair (linux images require one)
+- `network_id` (Number) unique identifier of the initial network (the organisation's default network when omitted)
 - `password` (String, Sensitive) initial windows password of the server
 - `private_ip` (String) initial private ip of the server
 

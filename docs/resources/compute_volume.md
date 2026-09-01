@@ -22,7 +22,7 @@ description: |-
 
 ### Optional
 
-- `name` (String) name of the volume
+- `name` (String) name of the volume (assigned by the api when omitted)
 - `restore_from_snapshot_id` (Number) restore the volume from the snapshot
 
 ### Read-Only

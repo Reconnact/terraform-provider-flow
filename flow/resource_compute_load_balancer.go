@@ -66,10 +66,12 @@ func (c computeLoadBalancerResourceType) GetSchema(ctx context.Context) (tfsdk.S
 			},
 			"network_id": {
 				Type:                types.Int64Type,
-				MarkdownDescription: "unique identifier of the initial network",
+				MarkdownDescription: "unique identifier of the initial network (the organisation's default network when omitted)",
 				Optional:            true,
+				Computed:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),
+					tfsdk.UseStateForUnknown(),
 				},
 			},
 			"private_ip": {
@@ -79,6 +81,7 @@ func (c computeLoadBalancerResourceType) GetSchema(ctx context.Context) (tfsdk.S
 				Computed:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),
+					tfsdk.UseStateForUnknown(),
 				},
 			},
 		},
