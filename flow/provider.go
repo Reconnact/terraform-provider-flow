@@ -138,8 +138,10 @@ func (p *provider) Configure(ctx context.Context, request tfsdk.ConfigureProvide
 		goclient.WithUserAgent(fmt.Sprintf("terraform-provider-flow/%s", p.version)),
 
 		goclient.WithHTTPClientOption(func(c *http.Client) {
+			base := http.DefaultTransport.(*http.Transport).Clone()
+			base.ResponseHeaderTimeout = responseHeaderTimeout
 			// the read retry sits outside the log transport so every attempt is traced
-			c.Transport = readRetryTransport{base: logTransport{base: c.Transport}}
+			c.Transport = readRetryTransport{base: logTransport{base: base}}
 		}),
 	)
 

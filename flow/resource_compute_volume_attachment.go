@@ -108,10 +108,12 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request tfs
 		return
 	}
 
-	volume, err = r.waitForVolumeStatus(ctx, "in use", int(config.VolumeID.Value), compute.VolumeStatusInUse)
+	attached, err := r.waitForVolumeStatus(ctx, "in use", int(config.VolumeID.Value), compute.VolumeStatusInUse)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume attachment: %s", err))
-		return
+	}
+	if attached.ID != 0 {
+		volume = attached
 	}
 
 	var state computeVolumeAttachmentResourceData
@@ -228,8 +230,7 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request tfs
 // volume settles, follow-up attach/expand/delete calls are refused
 func (r computeVolumeAttachmentResource) waitForVolumeStatus(ctx context.Context, status string, volumeID, wantStatus int) (volume compute.Volume, err error) {
 	err = waitFor(ctx, volumeSettleTimeout, defaultWaitInterval, fmt.Sprintf("volume %d to be %s", volumeID, status), func(ctx context.Context) (bool, error) {
-		var err error
-		volume, err = compute.NewVolumeService(r.client).Get(ctx, volumeID)
+		got, err := compute.NewVolumeService(r.client).Get(ctx, volumeID)
 		if err != nil {
 			// a volume that is gone counts as detached
 			if wantStatus == compute.VolumeStatusAvailable && statusCode(err) == http.StatusNotFound {
@@ -237,6 +238,7 @@ func (r computeVolumeAttachmentResource) waitForVolumeStatus(ctx context.Context
 			}
 			return false, err
 		}
+		volume = got
 
 		switch volume.Status.ID {
 		case wantStatus:

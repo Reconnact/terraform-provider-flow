@@ -120,10 +120,12 @@ func (r computeSnapshotResource) Create(ctx context.Context, request tfsdk.Creat
 		"data": snapshot,
 	})
 
-	snapshot, err = r.waitForSnapshotAvailable(ctx, snapshot.ID)
+	available, err := r.waitForSnapshotAvailable(ctx, snapshot.ID)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for snapshot to be available: %s", err))
-		return
+	}
+	if available.ID != 0 {
+		snapshot = available
 	}
 
 	var state computeSnapshotResourceData
@@ -223,11 +225,11 @@ func (r computeSnapshotResource) ImportState(ctx context.Context, request tfsdk.
 // restoring or deleting it in that window is refused
 func (r computeSnapshotResource) waitForSnapshotAvailable(ctx context.Context, snapshotID int) (snapshot compute.Snapshot, err error) {
 	err = waitFor(ctx, snapshotTimeout, defaultWaitInterval, fmt.Sprintf("snapshot %d to be available", snapshotID), func(ctx context.Context) (bool, error) {
-		var err error
-		snapshot, err = r.snapshotService.Get(ctx, snapshotID)
+		got, err := r.snapshotService.Get(ctx, snapshotID)
 		if err != nil {
 			return false, err
 		}
+		snapshot = got
 
 		switch snapshot.Status.ID {
 		case compute.SnapshotStatusAvailable:

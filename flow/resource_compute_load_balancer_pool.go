@@ -282,17 +282,16 @@ func (c computeLoadBalancerPoolResource) Create(ctx context.Context, request tfs
 		return
 	}
 
-	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
-	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
-		return
-	}
-
 	var state computeLoadBalancerPoolResourceData
 	state.FromEntity(loadBalancerID, pool)
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
+
+	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
+	}
 }
 
 func (c computeLoadBalancerPoolResource) Read(ctx context.Context, request tfsdk.ReadResourceRequest, response *tfsdk.ReadResourceResponse) {

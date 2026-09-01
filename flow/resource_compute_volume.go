@@ -140,10 +140,12 @@ func (r computeVolumeResource) Create(ctx context.Context, request tfsdk.CreateR
 		"data": volume,
 	})
 
-	volume, err = r.waitForVolumeSettled(ctx, volume.ID, snapshotTimeout)
+	settled, err := r.waitForVolumeSettled(ctx, volume.ID, snapshotTimeout)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume to settle: %s", err))
-		return
+	}
+	if settled.ID != 0 {
+		volume = settled
 	}
 
 	var state computeVolumeResourceData
@@ -278,11 +280,11 @@ func (r computeVolumeResource) ImportState(ctx context.Context, request tfsdk.Im
 // to available, and follow-up calls are refused until then
 func (r computeVolumeResource) waitForVolumeSettled(ctx context.Context, volumeID int, timeout time.Duration) (volume compute.Volume, err error) {
 	err = waitFor(ctx, timeout, defaultWaitInterval, fmt.Sprintf("volume %d to settle", volumeID), func(ctx context.Context) (bool, error) {
-		var err error
-		volume, err = r.volumeService.Get(ctx, volumeID)
+		got, err := r.volumeService.Get(ctx, volumeID)
 		if err != nil {
 			return false, err
 		}
+		volume = got
 
 		switch volume.Status.ID {
 		case compute.VolumeStatusAvailable, compute.VolumeStatusInUse:

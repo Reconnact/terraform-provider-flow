@@ -181,7 +181,7 @@ func (c computeServerResource) Create(ctx context.Context, request tfsdk.CreateR
 		return
 	}
 
-	order, err := c.orderService.WaitUntilProcessed(ctx, ordering)
+	order, err := waitForOrder(ctx, c.orderService, ordering)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for server creation: %s", err))
 		return
@@ -190,7 +190,9 @@ func (c computeServerResource) Create(ctx context.Context, request tfsdk.CreateR
 	server, err := c.waitForServerRunning(ctx, order.Product.ID)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for server to be running: %s", err))
-		return
+		if server.ID == 0 {
+			return
+		}
 	}
 
 	var state computeServerResourceData
@@ -272,11 +274,11 @@ func (c computeServerResource) Delete(ctx context.Context, request tfsdk.DeleteR
 // attaching volumes or network interfaces in that window is refused by the api
 func (c computeServerResource) waitForServerRunning(ctx context.Context, serverID int) (server compute.Server, err error) {
 	err = waitFor(ctx, serverBootTimeout, defaultWaitInterval, fmt.Sprintf("server %d to be running", serverID), func(ctx context.Context) (bool, error) {
-		var err error
-		server, err = c.serverService.Get(ctx, serverID)
+		got, err := c.serverService.Get(ctx, serverID)
 		if err != nil {
 			return false, err
 		}
+		server = got
 
 		switch server.Status.ID {
 		case compute.ServerStatusRunning:

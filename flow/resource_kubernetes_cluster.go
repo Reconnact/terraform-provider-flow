@@ -210,7 +210,7 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request tfsdk.Cre
 		return
 	}
 
-	order, err := k.orderService.WaitUntilProcessed(ctx, ordering)
+	order, err := waitForOrder(ctx, k.orderService, ordering)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster creation: %s", err))
 		return
@@ -219,7 +219,9 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request tfsdk.Cre
 	cluster, err := waitForClusterReady(ctx, k.clusterService, order.Product.ID)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be ready: %s", err))
-		return
+		if cluster.ID == 0 {
+			return
+		}
 	}
 
 	// set state of the resource
@@ -364,11 +366,11 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request tfsdk.Del
 // is unlocked and healthy, any update is refused with "currently busy" (400)
 func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be ready", clusterID), func(ctx context.Context) (bool, error) {
-		var err error
-		cluster, err = service.Get(ctx, clusterID)
+		got, err := service.Get(ctx, clusterID)
 		if err != nil {
 			return false, err
 		}
+		cluster = got
 		return !cluster.Locked && cluster.Status.ID == compute.ClusterStatusHealthy, nil
 	})
 
@@ -380,11 +382,11 @@ func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService,
 // with "currently busy" (400)
 func (k kubernetesClusterResource) waitForClusterUnlocked(ctx context.Context, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be unlocked", clusterID), func(ctx context.Context) (bool, error) {
-		var err error
-		cluster, err = k.clusterService.Get(ctx, clusterID)
+		got, err := k.clusterService.Get(ctx, clusterID)
 		if err != nil {
 			return false, err
 		}
+		cluster = got
 		return !cluster.Locked, nil
 	})
 
