@@ -282,9 +282,9 @@ func (c computeLoadBalancerPoolResource) Create(ctx context.Context, request tfs
 		return
 	}
 
-	err = c.loadBalancerService.WaitUntilMutable(ctx, loadBalancerID)
+	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to wait until load balancer is mutable: %s", err))
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		return
 	}
 
@@ -358,9 +358,9 @@ func (c computeLoadBalancerPoolResource) Update(ctx context.Context, request tfs
 		return
 	}
 
-	err = c.loadBalancerService.WaitUntilMutable(ctx, loadBalancerID)
+	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to wait until load balancer is mutable: %s", err))
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		return
 	}
 
@@ -389,9 +389,9 @@ func (c computeLoadBalancerPoolResource) Delete(ctx context.Context, request tfs
 		return
 	}
 
-	err = c.loadBalancerService.WaitUntilMutable(ctx, loadBalancerID)
+	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to wait until load balancer is mutable: %s", err))
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		return
 	}
 }

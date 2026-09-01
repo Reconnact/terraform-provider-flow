@@ -18,6 +18,9 @@ const (
 	serverBootTimeout   = 10 * time.Minute
 	clusterWaitTimeout  = 20 * time.Minute
 	volumeSettleTimeout = 5 * time.Minute
+	// a load balancer create stays working for about a minute, pool and member
+	// changes for seconds
+	loadBalancerTimeout = 10 * time.Minute
 	// snapshot create and volume restore copy the data and scale with its size
 	snapshotTimeout = 30 * time.Minute
 )

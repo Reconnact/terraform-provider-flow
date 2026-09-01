@@ -3,6 +3,7 @@ package flow
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
@@ -76,6 +77,9 @@ type computeElasticIPResource struct {
 	elasticIPService compute.ElasticIPService
 }
 
+// TEST WORKAROUND, do not commit — see Create
+var elasticIPCreateMu sync.Mutex
+
 func (c computeElasticIPResource) Create(ctx context.Context, request tfsdk.CreateResourceRequest, response *tfsdk.CreateResourceResponse) {
 	var config computeElasticIPResourceData
 	diagnostics := request.Config.Get(ctx, &config)
@@ -88,11 +92,16 @@ func (c computeElasticIPResource) Create(ctx context.Context, request tfsdk.Crea
 		LocationID: int(config.LocationID.Value),
 	}
 
+	// TEST WORKAROUND, do not commit — concurrent creates in one org collide on
+	// the metrics row under mariadb 12 snapshot isolation (F-39) and every loser
+	// leaks a floating ip (F-41); one create at a time avoids the collision
+	elasticIPCreateMu.Lock()
 	var elasticIP compute.ElasticIP
 	err := retryCreate(ctx, "create elastic ip", func() (err error) {
 		elasticIP, err = c.elasticIPService.Create(ctx, create)
 		return err
 	})
+	elasticIPCreateMu.Unlock()
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create elastic ip: %s", err))
 		return

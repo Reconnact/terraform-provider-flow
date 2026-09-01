@@ -216,7 +216,7 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request tfsdk.Cre
 		return
 	}
 
-	cluster, err := k.waitForClusterReady(ctx, order.Product.ID)
+	cluster, err := waitForClusterReady(ctx, k.clusterService, order.Product.ID)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be ready: %s", err))
 		return
@@ -362,10 +362,10 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request tfsdk.Del
 
 // the create order succeeds while the cluster is still provisioning — until it
 // is unlocked and healthy, any update is refused with "currently busy" (400)
-func (k kubernetesClusterResource) waitForClusterReady(ctx context.Context, clusterID int) (cluster kubernetes.Cluster, err error) {
+func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be ready", clusterID), func(ctx context.Context) (bool, error) {
 		var err error
-		cluster, err = k.clusterService.Get(ctx, clusterID)
+		cluster, err = service.Get(ctx, clusterID)
 		if err != nil {
 			return false, err
 		}
