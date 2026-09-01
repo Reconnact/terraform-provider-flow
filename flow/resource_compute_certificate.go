@@ -143,6 +143,7 @@ func (c computeCertificateResourceType) GetSchema(ctx context.Context) (tfsdk.Sc
 				MarkdownDescription: "certificate in base64 encoded PEM format",
 				Required:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
+					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					tfsdk.RequiresReplace(),
 				},
 			},
@@ -152,6 +153,7 @@ func (c computeCertificateResourceType) GetSchema(ctx context.Context) (tfsdk.Sc
 				Required:            true,
 				Sensitive:           true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
+					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					tfsdk.RequiresReplace(),
 				},
 			},

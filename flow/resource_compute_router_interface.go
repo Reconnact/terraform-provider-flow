@@ -7,13 +7,15 @@ import (
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ tfsdk.ResourceType = (*computeRouterInterfaceResourceType)(nil)
-	_ tfsdk.Resource     = (*computeRouterInterfaceResource)(nil)
+	_ tfsdk.ResourceType            = (*computeRouterInterfaceResourceType)(nil)
+	_ tfsdk.Resource                = (*computeRouterInterfaceResource)(nil)
+	_ tfsdk.ResourceWithImportState = (*computeRouterInterfaceResource)(nil)
 )
 
 type computeRouterInterfaceResourceData struct {
@@ -34,6 +36,7 @@ type computeRouterInterfaceResourceType struct{}
 
 func (c computeRouterInterfaceResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		MarkdownDescription: "Import: `terraform import flow_compute_router_interface.<name> <router_id>:<id>`",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
 				Type:                types.Int64Type,
@@ -170,4 +173,8 @@ func (c computeRouterInterfaceResource) Delete(ctx context.Context, request tfsd
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete router interface: %s", err))
 		return
 	}
+}
+
+func (c computeRouterInterfaceResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+	importStateCompositeInt64IDs(ctx, request, response, path.Root("router_id"), path.Root("id"))
 }

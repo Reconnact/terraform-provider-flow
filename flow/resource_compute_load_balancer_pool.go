@@ -7,13 +7,15 @@ import (
 
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ tfsdk.ResourceType = (*computeLoadBalancerPoolResourceType)(nil)
-	_ tfsdk.Resource     = (*computeLoadBalancerPoolResource)(nil)
+	_ tfsdk.ResourceType            = (*computeLoadBalancerPoolResourceType)(nil)
+	_ tfsdk.Resource                = (*computeLoadBalancerPoolResource)(nil)
+	_ tfsdk.ResourceWithImportState = (*computeLoadBalancerPoolResource)(nil)
 )
 
 type computeLoadBalancerHTTPHealthCheckResourceData struct {
@@ -89,6 +91,7 @@ type computeLoadBalancerPoolResourceType struct{}
 
 func (c computeLoadBalancerPoolResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		MarkdownDescription: "Import: `terraform import flow_compute_load_balancer_pool.<name> <load_balancer_id>:<id>`",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
 				Type:                types.Int64Type,
@@ -437,4 +440,8 @@ func convertHealthCheckConfigToAPIOptions(config computeLoadBalancerHealthCheckR
 	}
 
 	return
+}
+
+func (c computeLoadBalancerPoolResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+	importStateCompositeInt64IDs(ctx, request, response, path.Root("load_balancer_id"), path.Root("id"))
 }

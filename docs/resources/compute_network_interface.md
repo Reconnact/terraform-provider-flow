@@ -3,12 +3,12 @@
 page_title: "flow_compute_network_interface Resource - terraform-provider-flow"
 subcategory: ""
 description: |-
-  
+  Import: terraform import flow_compute_network_interface.<name> <server_id>:<id>
 ---
 
 # flow_compute_network_interface (Resource)
 
-
+Import: `terraform import flow_compute_network_interface.<name> <server_id>:<id>`
 
 
 

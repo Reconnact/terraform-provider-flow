@@ -156,6 +156,7 @@ func (c computeServerResourceType) GetSchema(ctx context.Context) (tfsdk.Schema,
 				Optional:            true,
 				Sensitive:           true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
+					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					tfsdk.RequiresReplace(),
 				},
 			},
@@ -164,6 +165,7 @@ func (c computeServerResourceType) GetSchema(ctx context.Context) (tfsdk.Schema,
 				MarkdownDescription: "cloud init script",
 				Optional:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
+					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					tfsdk.RequiresReplace(),
 				},
 			},

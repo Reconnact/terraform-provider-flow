@@ -9,6 +9,7 @@ import (
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -16,8 +17,9 @@ import (
 )
 
 var (
-	_ tfsdk.ResourceType = (*computeNetworkInterfaceResourceType)(nil)
-	_ tfsdk.Resource     = (*computeNetworkInterfaceResource)(nil)
+	_ tfsdk.ResourceType            = (*computeNetworkInterfaceResourceType)(nil)
+	_ tfsdk.Resource                = (*computeNetworkInterfaceResource)(nil)
+	_ tfsdk.ResourceWithImportState = (*computeNetworkInterfaceResource)(nil)
 )
 
 type computeNetworkInterfaceResourceData struct {
@@ -52,6 +54,7 @@ type computeNetworkInterfaceResourceType struct{}
 
 func (c computeNetworkInterfaceResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		MarkdownDescription: "Import: `terraform import flow_compute_network_interface.<name> <server_id>:<id>`",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
 				Type:                types.Int64Type,
@@ -332,4 +335,8 @@ func securityGroupIDs(set types.Set) []int {
 		}
 	}
 	return ids
+}
+
+func (c computeNetworkInterfaceResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+	importStateCompositeInt64IDs(ctx, request, response, path.Root("server_id"), path.Root("id"))
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -16,6 +17,7 @@ import (
 var (
 	_ tfsdk.ResourceType                 = (*computeSecurityGroupRuleResourceType)(nil)
 	_ tfsdk.Resource                     = (*computeSecurityGroupRuleResource)(nil)
+	_ tfsdk.ResourceWithImportState      = (*computeSecurityGroupRuleResource)(nil)
 	_ tfsdk.ResourceWithConfigValidators = (*computeSecurityGroupRuleResource)(nil)
 )
 
@@ -120,6 +122,7 @@ type computeSecurityGroupRuleResourceType struct{}
 
 func (c computeSecurityGroupRuleResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
+		MarkdownDescription: "Import: `terraform import flow_compute_security_group_rule.<name> <security_group_id>:<id>`",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
 				Type:                types.Int64Type,
@@ -380,4 +383,8 @@ func (c computeSecurityGroupRuleResource) ConfigValidators(ctx context.Context) 
 		validators.MutuallyExclusive("port_range", "icmp"),
 		validators.MutuallyExclusive("ip_range", "remote_security_group_id"),
 	}
+}
+
+func (c computeSecurityGroupRuleResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+	importStateCompositeInt64IDs(ctx, request, response, path.Root("security_group_id"), path.Root("id"))
 }

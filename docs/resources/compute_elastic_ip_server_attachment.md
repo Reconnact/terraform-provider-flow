@@ -3,12 +3,12 @@
 page_title: "flow_compute_elastic_ip_server_attachment Resource - terraform-provider-flow"
 subcategory: ""
 description: |-
-  
+  Import: terraform import flow_compute_elastic_ip_server_attachment.<name> <server_id>:<elastic_ip_id>
 ---
 
 # flow_compute_elastic_ip_server_attachment (Resource)
 
-
+Import: `terraform import flow_compute_elastic_ip_server_attachment.<name> <server_id>:<elastic_ip_id>`
 
 
 
