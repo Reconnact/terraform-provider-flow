@@ -189,7 +189,7 @@ func (t readRetryTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	delay := policy.InitialDelay
 
 	for attempt := 1; ; attempt++ {
-		res, err := t.base.RoundTrip(req)
+		res, err := t.base.RoundTrip(req.Clone(ctx))
 		if err == nil && res.StatusCode < http.StatusInternalServerError {
 			return res, nil
 		}

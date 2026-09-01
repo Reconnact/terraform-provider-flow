@@ -137,12 +137,7 @@ func (p *provider) Configure(ctx context.Context, request tfsdk.ConfigureProvide
 		goclient.WithBase(data.Endpoint.Value),
 		goclient.WithUserAgent(fmt.Sprintf("terraform-provider-flow/%s", p.version)),
 
-		goclient.WithHTTPClientOption(func(c *http.Client) {
-			base := http.DefaultTransport.(*http.Transport).Clone()
-			base.ResponseHeaderTimeout = responseHeaderTimeout
-			// the read retry sits outside the log transport so every attempt is traced
-			c.Transport = readRetryTransport{base: logTransport{base: base}}
-		}),
+		goclient.WithHTTPClientOption(installTransport),
 	)
 
 	p.configured = true
@@ -260,4 +255,24 @@ func (l logTransport) transport() http.RoundTripper {
 	}
 
 	return l.base
+}
+
+func installTransport(c *http.Client) {
+	base := http.DefaultTransport.(*http.Transport).Clone()
+	base.ResponseHeaderTimeout = responseHeaderTimeout
+
+	// goclient's WithToken put its auth transport in front of the default one —
+	// replacing it drops the authorization header
+	var inner http.RoundTripper = base
+	switch t := c.Transport.(type) {
+	case goclient.AuthTransport:
+		t.Base = base
+		inner = t
+	case nil:
+	default:
+		inner = t
+	}
+
+	// the read retry sits outside the log transport so every attempt is traced
+	c.Transport = readRetryTransport{base: logTransport{base: inner}}
 }
