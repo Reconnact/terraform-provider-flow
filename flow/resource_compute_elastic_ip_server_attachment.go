@@ -51,7 +51,7 @@ func (c computeElasticIPServerAttachmentResourceType) GetSchema(ctx context.Cont
 			},
 			"network_interface_id": {
 				Type:                types.Int64Type,
-				MarkdownDescription: "unique identifier of the network interface of the server to attach the elastic ip to",
+				MarkdownDescription: "unique identifier of the network interface to attach the elastic ip to — `flow_compute_server.<name>.network_interface_id` for a server's primary interface",
 				Required:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),

@@ -295,12 +295,17 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 			return
 		}
 
+		current, err := k.clusterService.GetConfiguration(ctx, int(state.ID.Value))
+		if err != nil {
+			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to read cluster configuration: %s", err))
+			return
+		}
 		update := kubernetes.ClusterConfiguration{
 			VersionID: int(plan.VersionID.Value),
-			// TODO configuration options
+			Variables: current.Variables,
 		}
 
-		err := retry(ctx, "update cluster configuration", func() (err error) {
+		err = retry(ctx, "update cluster configuration", func() (err error) {
 			_, err = k.clusterService.UpdateConfiguration(ctx, int(state.ID.Value), update)
 			return err
 		})

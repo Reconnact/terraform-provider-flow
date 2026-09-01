@@ -35,12 +35,15 @@ func (t computeVolumeAttachmentResourceType) GetSchema(ctx context.Context) (tfs
 		Attributes: map[string]tfsdk.Attribute{
 			"volume_id": {
 				Type:                types.Int64Type,
-				MarkdownDescription: "identifier of the volume for the attachment",
+				MarkdownDescription: "identifier of the volume for the attachment — changing it replaces the attachment (detach, attach), the volumes themselves are not touched",
 				Required:            true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{
+					tfsdk.RequiresReplace(),
+				},
 			},
 			"server_id": {
 				Type:                types.Int64Type,
-				MarkdownDescription: "identifier of the server for the attachment",
+				MarkdownDescription: "identifier of the server for the attachment — changing it moves the volume to the other server",
 				Required:            true,
 			},
 		},
@@ -160,8 +163,8 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request tfs
 		return
 	}
 
-	var config computeVolumeAttachmentResourceData
-	diagnostics = request.Config.Get(ctx, &config)
+	var plan computeVolumeAttachmentResourceData
+	diagnostics = request.Plan.Get(ctx, &plan)
 	response.Diagnostics.Append(diagnostics...)
 	if response.Diagnostics.HasError() {
 		return
@@ -185,7 +188,7 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request tfs
 
 	// attach the volume to the new server
 	attach := compute.VolumeAttach{
-		InstanceID: int(config.ServerID.Value),
+		InstanceID: int(plan.ServerID.Value),
 	}
 
 	var volume compute.Volume

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -29,6 +30,9 @@ type computeServerResourceData struct {
 	KeyPairID  types.Int64  `tfsdk:"key_pair_id"`
 	Password   types.String `tfsdk:"password"`
 	CloudInit  types.String `tfsdk:"cloud_init"`
+
+	NetworkInterfaceID types.Int64 `tfsdk:"network_interface_id"`
+	SecurityGroupIDs   types.Set   `tfsdk:"security_group_ids"`
 }
 
 func (c *computeServerResourceData) FromEntity(server compute.Server) {
@@ -39,11 +43,22 @@ func (c *computeServerResourceData) FromEntity(server compute.Server) {
 	c.ProductID = types.Int64{Value: int64(server.Product.ID)}
 	c.KeyPairID = types.Int64{Null: server.KeyPair.ID == 0, Value: int64(server.KeyPair.ID)}
 
+	c.NetworkInterfaceID = types.Int64{Null: true}
 	if len(server.Networks) != 0 {
 		network := server.Networks[0]
 		c.NetworkID = types.Int64{Value: int64(network.ID)}
-		c.PrivateIP = types.String{Value: network.Interfaces[0].PrivateIP}
+		if len(network.Interfaces) != 0 {
+			c.PrivateIP = types.String{Value: network.Interfaces[0].PrivateIP}
+			c.NetworkInterfaceID = types.Int64{Value: int64(network.Interfaces[0].ID)}
+		}
 	}
+}
+
+func primaryInterfaceID(server compute.Server) (int, bool) {
+	if len(server.Networks) == 0 || len(server.Networks[0].Interfaces) == 0 {
+		return 0, false
+	}
+	return server.Networks[0].Interfaces[0].ID, true
 }
 
 type computeServerResourceType struct{}
@@ -105,6 +120,23 @@ func (c computeServerResourceType) GetSchema(ctx context.Context) (tfsdk.Schema,
 				Computed:            true,
 				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.RequiresReplace(),
+					tfsdk.UseStateForUnknown(),
+				},
+			},
+			"network_interface_id": {
+				Type:                types.Int64Type,
+				MarkdownDescription: "unique identifier of the server's primary network interface — reference it from elastic ip attachments",
+				Computed:            true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{
+					tfsdk.UseStateForUnknown(),
+				},
+			},
+			"security_group_ids": {
+				Type:                types.SetType{ElemType: types.Int64Type},
+				MarkdownDescription: "security groups on the primary network interface — the organisation's default group when omitted; at least one is required",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: tfsdk.AttributePlanModifiers{
 					tfsdk.UseStateForUnknown(),
 				},
 			},
@@ -198,6 +230,10 @@ func (c computeServerResource) Create(ctx context.Context, request tfsdk.CreateR
 		if server.ID == 0 {
 			return
 		}
+	} else if !config.SecurityGroupIDs.Null && !config.SecurityGroupIDs.Unknown {
+		if err := c.updateSecurityGroups(ctx, server, config.SecurityGroupIDs); err != nil {
+			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security groups: %s", err))
+		}
 	}
 
 	var state computeServerResourceData
@@ -206,6 +242,7 @@ func (c computeServerResource) Create(ctx context.Context, request tfsdk.CreateR
 	state.Password = config.Password
 	state.CloudInit = config.CloudInit
 
+	response.Diagnostics.Append(c.readSecurityGroups(ctx, server, &state)...)
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }
 
@@ -228,6 +265,11 @@ func (c computeServerResource) Read(ctx context.Context, request tfsdk.ReadResou
 
 	state.FromEntity(server)
 
+	response.Diagnostics.Append(c.readSecurityGroups(ctx, server, &state)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }
 
@@ -238,14 +280,14 @@ func (c computeServerResource) Update(ctx context.Context, request tfsdk.UpdateR
 		return
 	}
 
-	var config computeServerResourceData
-	response.Diagnostics.Append(request.Config.Get(ctx, &config)...)
+	var plan computeServerResourceData
+	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
 
 	update := compute.ServerUpdate{
-		Name: config.Name.Value,
+		Name: plan.Name.Value,
 	}
 
 	var server compute.Server
@@ -258,7 +300,19 @@ func (c computeServerResource) Update(ctx context.Context, request tfsdk.UpdateR
 		return
 	}
 
+	if !plan.SecurityGroupIDs.Unknown && !plan.SecurityGroupIDs.Null && !plan.SecurityGroupIDs.Equal(state.SecurityGroupIDs) {
+		if err := c.updateSecurityGroups(ctx, server, plan.SecurityGroupIDs); err != nil {
+			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security groups: %s", err))
+			return
+		}
+	}
+
 	state.FromEntity(server)
+
+	response.Diagnostics.Append(c.readSecurityGroups(ctx, server, &state)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }
@@ -304,4 +358,41 @@ func (c computeServerResource) waitForServerRunning(ctx context.Context, serverI
 
 func (c computeServerResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
+}
+
+// the groups sit on the primary interface, not on the server
+func (c computeServerResource) updateSecurityGroups(ctx context.Context, server compute.Server, groups types.Set) error {
+	ifaceID, ok := primaryInterfaceID(server)
+	if !ok {
+		return fmt.Errorf("server %d has no network interface", server.ID)
+	}
+
+	update := compute.NetworkInterfaceSecurityGroupUpdate{SecurityGroupIDs: securityGroupIDs(groups)}
+	return retry(ctx, "update security groups", func() (err error) {
+		_, err = c.serverService.NetworkInterfaces(server.ID).UpdateSecurityGroups(ctx, ifaceID, update)
+		return err
+	})
+}
+
+func (c computeServerResource) readSecurityGroups(ctx context.Context, server compute.Server, state *computeServerResourceData) (diagnostics diag.Diagnostics) {
+	state.SecurityGroupIDs = types.Set{ElemType: types.Int64Type, Null: true}
+
+	ifaceID, ok := primaryInterfaceID(server)
+	if !ok {
+		return nil
+	}
+
+	list, err := c.serverService.NetworkInterfaces(server.ID).List(ctx, goclient.Cursor{NoFilter: 1})
+	if err != nil {
+		diagnostics.AddError("Client Error", fmt.Sprintf("unable to list network interfaces of server %d: %s", server.ID, err))
+		return diagnostics
+	}
+
+	for _, iface := range list.Items {
+		if iface.ID == ifaceID {
+			state.SecurityGroupIDs = securityGroupIDSet(iface)
+			break
+		}
+	}
+	return nil
 }

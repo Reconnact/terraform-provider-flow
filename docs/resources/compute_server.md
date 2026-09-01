@@ -29,7 +29,9 @@ description: |-
 - `network_id` (Number) unique identifier of the initial network (the organisation's default network when omitted)
 - `password` (String, Sensitive) initial windows password of the server
 - `private_ip` (String) initial private ip of the server
+- `security_group_ids` (Set of Number) security groups on the primary network interface — the organisation's default group when omitted; at least one is required
 
 ### Read-Only
 
 - `id` (Number) unique identifier of the server
+- `network_interface_id` (Number) unique identifier of the server's primary network interface — reference it from elastic ip attachments
