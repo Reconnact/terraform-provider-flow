@@ -71,8 +71,7 @@ func (k kubernetesKubeConfigDataSource) Read(ctx context.Context, request tfsdk.
 
 	clusterID := int(config.ClusterID.Value)
 
-	// the kube-config is refused with "still initializing" until the cluster is
-	// healthy and unlocked — the plain get first so a wrong id fails at once
+	// the kube-config is refused  until the cluster is healthy and unlocked — the plain get first so a wrong id fails at once
 	cluster, err := k.clusterService.Get(ctx, clusterID)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get cluster: %s", err))

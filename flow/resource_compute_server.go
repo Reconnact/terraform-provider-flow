@@ -341,8 +341,6 @@ func (c computeServerResource) Delete(ctx context.Context, request tfsdk.DeleteR
 	}
 }
 
-// the order is already processed while the server is still booting —
-// attaching volumes or network interfaces in that window is refused by the api
 func (c computeServerResource) waitForServerStatus(ctx context.Context, serverID int, want int, name string) (server compute.Server, err error) {
 	err = waitFor(ctx, serverBootTimeout, defaultWaitInterval, fmt.Sprintf("server %d to be %s", serverID, name), func(ctx context.Context) (bool, error) {
 		got, err := c.serverService.Get(ctx, serverID)
@@ -368,7 +366,6 @@ func (c computeServerResource) ImportState(ctx context.Context, request tfsdk.Im
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-// the groups sit on the primary interface, not on the server
 func (c computeServerResource) updateSecurityGroups(ctx context.Context, server compute.Server, groups types.Set) error {
 	ifaceID, ok := primaryInterfaceID(server)
 	if !ok {
@@ -432,7 +429,6 @@ func (c computeServerResource) resize(ctx context.Context, server compute.Server
 		_, err = waitForOrder(ctx, c.orderService, ordering)
 	}
 	if err == nil {
-		// the server passes through upgrading and comes back stopped
 		_, err = c.waitForServerStatus(ctx, server.ID, compute.ServerStatusStopped, "stopped")
 	}
 

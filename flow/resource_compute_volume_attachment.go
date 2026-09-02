@@ -237,8 +237,7 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request tfs
 	}
 }
 
-// nova acks attach and detach while cinder is still working on it — the
-// backend waits only on the detach side, and only for 30 seconds; until the
+// the backend waits only on the detach side, and only for 30 seconds; until the
 // volume settles, follow-up attach/expand/delete calls are refused
 func (r computeVolumeAttachmentResource) waitForVolumeStatus(ctx context.Context, status string, volumeID, wantStatus int) (volume compute.Volume, err error) {
 	err = waitFor(ctx, volumeSettleTimeout, defaultWaitInterval, fmt.Sprintf("volume %d to be %s", volumeID, status), func(ctx context.Context) (bool, error) {

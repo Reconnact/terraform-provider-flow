@@ -15,12 +15,9 @@ import (
 )
 
 // Every mutating API call is retried with a bounded backoff, regardless of the
-// error message: the Flow API reports transient conditions (parallel creates,
-// servers still booting, ports still held) with the same 400 it uses for
-// genuine mistakes. Not retried: 401/403, 404 (success on a delete), context
-// cancellation, and transport failures on a create (the request may have gone
-// through). The budget is short so that real mistakes still surface quickly;
-// it is configurable via the provider's `retry_timeout`.
+// error message. Not retried: 401/403, 404 (success on a delete), context
+// cancellation, and transport failures on a create.
+// The budget is short so that real mistakes still surface quickly; it is configurable via the provider's `retry_timeout`.
 
 const (
 	defaultRetryTimeout      = 90 * time.Second

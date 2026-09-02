@@ -279,9 +279,8 @@ func (r computeVolumeResource) ImportState(ctx context.Context, request tfsdk.Im
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-// a restore or an expand leaves the volume in the working state while cinder
-// finishes the job — an attached volume settles to in-use, an unattached one
-// to available, and follow-up calls are refused until then
+// a restore or an expand leaves the volume in the working state while the
+// job is finished — follow-up calls are refused until then
 func (r computeVolumeResource) waitForVolumeSettled(ctx context.Context, volumeID int, timeout time.Duration) (volume compute.Volume, err error) {
 	err = waitFor(ctx, timeout, defaultWaitInterval, fmt.Sprintf("volume %d to settle", volumeID), func(ctx context.Context) (bool, error) {
 		got, err := r.volumeService.Get(ctx, volumeID)

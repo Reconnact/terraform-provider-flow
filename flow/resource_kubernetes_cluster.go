@@ -273,8 +273,7 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request tfsdk.Upd
 	}
 
 	if plan.Name.Value != state.Name.Value {
-		// no unlock wait here — the name update is not guarded by the action
-		// lock (ClusterHandler::updateCluster), unlike configuration and flavor
+		// no unlock wait here — the name update is not guarded by the action , unlike configuration and flavor
 		update := kubernetes.ClusterUpdate{
 			Name: plan.Name.Value,
 		}
@@ -373,7 +372,7 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request tfsdk.Del
 }
 
 // the create order succeeds while the cluster is still provisioning — until it
-// is unlocked and healthy, any update is refused with "currently busy" (400)
+// is unlocked and healthy, updates are refused
 func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be ready", clusterID), func(ctx context.Context) (bool, error) {
 		got, err := service.Get(ctx, clusterID)
@@ -389,7 +388,6 @@ func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService,
 
 // configuration and flavor updates run as an async action that keeps the
 // cluster locked after the call returns — any update in that window is refused
-// with "currently busy" (400)
 func (k kubernetesClusterResource) waitForClusterUnlocked(ctx context.Context, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be unlocked", clusterID), func(ctx context.Context) (bool, error) {
 		got, err := k.clusterService.Get(ctx, clusterID)

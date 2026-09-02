@@ -30,10 +30,9 @@ func importStatePassthroughInt64ID(ctx context.Context, attrPath path.Path, requ
 	response.Diagnostics.Append(response.State.SetAttribute(ctx, attrPath, types.Int64{Value: id})...)
 }
 
-// importStateCompositeInt64IDs is the same for resources that are only
-// addressable through a parent: the import id carries every identifying
-// attribute, colon separated, in the order of attrPaths
-// (e.g. `server_id:id` → "42:7").
+// importStateCompositeInt64IDs is the same as importStatePassthroughInt64ID
+// for resources that are only addressable through a parent: the import id carries every identifying
+// attribute, colon separated, in the order of attrPaths (e.g. `server_id:id` → "42:7").
 func importStateCompositeInt64IDs(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse, attrPaths ...path.Path) {
 	parts := strings.Split(request.ID, ":")
 	if len(parts) != len(attrPaths) {

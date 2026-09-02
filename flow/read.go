@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-// an object deleted outside terraform is dropped from the state on refresh,
+// an object deleted outside terraform (e.g. via API) is dropped from the state on refresh,
 // so the next plan recreates it instead of failing
 
 func isNotFound(err error) bool {
