@@ -163,7 +163,7 @@ func (c computeNetworkInterfaceResource) Create(ctx context.Context, request tfs
 	ifaceID := iface.ID
 
 	rollback := func(what string, err error) {
-		_ = retry(ctx, "delete network interface", func() error { return service.Delete(ctx, ifaceID) })
+		_ = retryDelete(ctx, "delete network interface", func() error { return service.Delete(ctx, ifaceID) })
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("%s: %s", what, err))
 	}
 
@@ -310,7 +310,7 @@ func (c computeNetworkInterfaceResource) Delete(ctx context.Context, request tfs
 	serverID := int(state.ServerID.Value)
 	ifaceID := int(state.ID.Value)
 
-	err := retry(ctx, "delete network interface", func() error {
+	err := retryDelete(ctx, "delete network interface", func() error {
 		return c.serverService.NetworkInterfaces(serverID).Delete(ctx, ifaceID)
 	})
 	if err != nil {

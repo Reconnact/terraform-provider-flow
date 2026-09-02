@@ -270,7 +270,7 @@ func (c computeNetworkResource) Delete(ctx context.Context, request tfsdk.Delete
 		return
 	}
 
-	err := retry(ctx, "delete network", func() error {
+	err := retryDelete(ctx, "delete network", func() error {
 		return c.networkService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

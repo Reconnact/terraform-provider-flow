@@ -156,7 +156,7 @@ func (c computeKeyPairResource) Delete(ctx context.Context, request tfsdk.Delete
 		return
 	}
 
-	err := retry(ctx, "delete key pair", func() error {
+	err := retryDelete(ctx, "delete key pair", func() error {
 		return c.keyPairService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

@@ -332,7 +332,7 @@ func (c computeServerResource) Delete(ctx context.Context, request tfsdk.DeleteR
 		return
 	}
 
-	err := retry(ctx, "delete server", func() error {
+	err := retryDelete(ctx, "delete server", func() error {
 		return c.serverService.Delete(ctx, int(state.ID.Value), false)
 	})
 	if err != nil {

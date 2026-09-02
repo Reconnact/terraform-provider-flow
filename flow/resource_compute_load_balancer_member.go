@@ -213,7 +213,7 @@ func (c computeLoadBalancerMemberResource) Delete(ctx context.Context, request t
 	poolID := int(state.PoolID.Value)
 	memberID := int(state.ID.Value)
 
-	err := retry(ctx, "delete load balancer member", func() error {
+	err := retryDelete(ctx, "delete load balancer member", func() error {
 		return c.loadBalancerService.Pools(loadBalancerID).Members(poolID).Delete(ctx, memberID)
 	})
 	if err != nil {

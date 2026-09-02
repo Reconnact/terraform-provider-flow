@@ -146,7 +146,7 @@ func (c computeElasticIPResource) Delete(ctx context.Context, request tfsdk.Dele
 		return
 	}
 
-	err := retry(ctx, "delete elastic ip", func() error {
+	err := retryDelete(ctx, "delete elastic ip", func() error {
 		return c.elasticIPService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

@@ -182,7 +182,7 @@ func (c computeElasticIPServerAttachmentResource) Delete(ctx context.Context, re
 		return
 	}
 
-	err := retry(ctx, "detach elastic ip", func() error {
+	err := retryDelete(ctx, "detach elastic ip", func() error {
 		return compute.NewServerElasticIPService(c.client, int(state.ServerID.Value)).Detach(ctx, int(state.ElasticIPID.Value))
 	})
 	if err != nil {

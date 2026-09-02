@@ -212,7 +212,7 @@ func (r computeSnapshotResource) Delete(ctx context.Context, request tfsdk.Delet
 		return
 	}
 
-	err := retry(ctx, "delete snapshot", func() error {
+	err := retryDelete(ctx, "delete snapshot", func() error {
 		return r.snapshotService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

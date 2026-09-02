@@ -282,7 +282,7 @@ func (c computeCertificateResource) Delete(ctx context.Context, request tfsdk.De
 		return
 	}
 
-	err := retry(ctx, "delete certificate", func() error {
+	err := retryDelete(ctx, "delete certificate", func() error {
 		return c.certificateService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

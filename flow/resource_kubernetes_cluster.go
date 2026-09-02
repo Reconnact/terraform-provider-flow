@@ -357,7 +357,7 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request tfsdk.Del
 		return
 	}
 
-	err := retry(ctx, "delete cluster", func() error {
+	err := retryDelete(ctx, "delete cluster", func() error {
 		return k.clusterService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

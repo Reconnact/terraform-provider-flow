@@ -19,6 +19,9 @@
   balancers mutable, clusters ready or gone — with a deadline and a clear error on every wait.
 - A create that fails halfway leaves a tainted resource instead of an untracked one, and objects
   deleted outside Terraform are dropped from the state and recreated instead of failing every plan.
+- A 404 counts as success only for deletes and detaches; on updates the api's error surfaces —
+  the api answers 404 for missing sub-entities too (e.g. an unknown cluster version), which was
+  silently mistaken for success before.
 
 ### Fixes and additions
 - Kubernetes clusters can be updated without pinning `version_id`, and a version change keeps the

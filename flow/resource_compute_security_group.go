@@ -171,7 +171,7 @@ func (c computeSecurityGroupResource) Delete(ctx context.Context, request tfsdk.
 		return
 	}
 
-	err := retry(ctx, "delete security group", func() error {
+	err := retryDelete(ctx, "delete security group", func() error {
 		return c.securityGroupService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

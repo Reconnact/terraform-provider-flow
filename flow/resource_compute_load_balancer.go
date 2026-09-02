@@ -211,7 +211,7 @@ func (c computeLoadBalancerResource) Delete(ctx context.Context, request tfsdk.D
 		return
 	}
 
-	err := retry(ctx, "delete load balancer", func() error {
+	err := retryDelete(ctx, "delete load balancer", func() error {
 		return c.loadBalancerService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

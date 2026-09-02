@@ -166,7 +166,7 @@ func (c computeRouterRouteResource) Delete(ctx context.Context, request tfsdk.De
 	}
 
 	routerID := int(state.RouterID.Value)
-	err := retry(ctx, "delete route", func() error {
+	err := retryDelete(ctx, "delete route", func() error {
 		return compute.NewRouteService(c.client, routerID).Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

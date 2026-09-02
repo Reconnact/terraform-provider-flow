@@ -15,8 +15,10 @@ import (
 )
 
 // Every mutating API call is retried with a bounded backoff, regardless of the
-// error message. Not retried: 401/403, 404 (success on a delete), context
-// cancellation, and transport failures on a create.
+// error message. Not retried: 401/403, 404 (success on a delete, an error on
+// everything else — the api answers 404 for missing sub-entities too, e.g. an
+// unknown cluster version), context cancellation, and transport failures on a
+// create.
 // The budget is short so that real mistakes still surface quickly; it is configurable via the provider's `retry_timeout`.
 
 const (
@@ -43,10 +45,11 @@ type retryOperation int
 const (
 	opMutate retryOperation = iota
 	opCreate
+	opDelete
 )
 
 // retry runs fn until it succeeds or the budget is exhausted and returns the
-// last error unchanged. A 404 is treated as success.
+// last error unchanged. A 404 stops with the error.
 func retry(ctx context.Context, what string, fn func() error) error {
 	return retryWith(ctx, defaultRetryPolicy, opMutate, what, fn)
 }
@@ -55,6 +58,12 @@ func retry(ctx context.Context, what string, fn func() error) error {
 // not retried because a duplicate could be created.
 func retryCreate(ctx context.Context, what string, fn func() error) error {
 	return retryWith(ctx, defaultRetryPolicy, opCreate, what, fn)
+}
+
+// retryDelete is retry for calls that remove objects (deletes, detaches):
+// a 404 means the object is already gone and counts as success.
+func retryDelete(ctx context.Context, what string, fn func() error) error {
+	return retryWith(ctx, defaultRetryPolicy, opDelete, what, fn)
 }
 
 func retryWith(ctx context.Context, policy retryPolicy, op retryOperation, what string, fn func() error) error {
@@ -129,7 +138,7 @@ func classifyRetry(err error, op retryOperation) retryDecision {
 		case http.StatusUnauthorized, http.StatusForbidden:
 			return retryStop
 		case http.StatusNotFound:
-			if op == opMutate {
+			if op == opDelete {
 				return retryTreatAsSuccess
 			}
 			return retryStop

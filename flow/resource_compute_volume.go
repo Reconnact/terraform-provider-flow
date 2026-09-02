@@ -266,7 +266,7 @@ func (r computeVolumeResource) Delete(ctx context.Context, request tfsdk.DeleteR
 		return
 	}
 
-	err := retry(ctx, "delete volume", func() error {
+	err := retryDelete(ctx, "delete volume", func() error {
 		return r.volumeService.Delete(ctx, int(state.ID.Value))
 	})
 	if err != nil {

@@ -369,7 +369,7 @@ func (c computeSecurityGroupRuleResource) Delete(ctx context.Context, request tf
 	securityGroupID := int(state.SecurityGroupID.Value)
 	ruleID := int(state.ID.Value)
 
-	err := retry(ctx, "delete security group rule", func() error {
+	err := retryDelete(ctx, "delete security group rule", func() error {
 		return c.securityGroupService.Rules(securityGroupID).Delete(ctx, ruleID)
 	})
 	if err != nil {

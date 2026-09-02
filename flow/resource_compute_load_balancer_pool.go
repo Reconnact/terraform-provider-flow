@@ -387,7 +387,7 @@ func (c computeLoadBalancerPoolResource) Delete(ctx context.Context, request tfs
 	loadBalancerID := int(state.LoadBalancerID.Value)
 	poolID := int(state.ID.Value)
 
-	err := retry(ctx, "delete load balancer pool", func() error {
+	err := retryDelete(ctx, "delete load balancer pool", func() error {
 		return c.loadBalancerService.Pools(loadBalancerID).Delete(ctx, poolID)
 	})
 	if err != nil {

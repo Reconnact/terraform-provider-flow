@@ -171,7 +171,7 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request tfs
 	}
 
 	// detach the volume from the current server
-	err := retry(ctx, "detach volume", func() error {
+	err := retryDelete(ctx, "detach volume", func() error {
 		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.Value), int(state.ServerID.Value))
 	})
 	if err != nil {
@@ -223,7 +223,7 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request tfs
 		return
 	}
 
-	err := retry(ctx, "detach volume", func() error {
+	err := retryDelete(ctx, "detach volume", func() error {
 		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.Value), int(state.ServerID.Value))
 	})
 	if err != nil {
