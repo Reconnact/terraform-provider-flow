@@ -61,12 +61,8 @@ func (t computeVolumeResourceType) GetSchema(ctx context.Context) (tfsdk.Schema,
 
 			"name": {
 				Type:                types.StringType,
-				MarkdownDescription: "name of the volume (assigned by the api when omitted)",
-				Optional:            true,
-				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
-				},
+				MarkdownDescription: "name of the volume",
+				Required:            true,
 			},
 			"size": {
 				Type:                types.Int64Type,
