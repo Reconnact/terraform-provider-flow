@@ -97,11 +97,8 @@ func (c computeServerResourceType) GetSchema(ctx context.Context) (tfsdk.Schema,
 			},
 			"product_id": {
 				Type:                types.Int64Type,
-				MarkdownDescription: "unique identifier of the product",
+				MarkdownDescription: "unique identifier of the product — changing it resizes the server in place: it is stopped, resized and started again (about a minute of downtime), disks and addresses are kept",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
-				},
 			},
 			"network_id": {
 				Type:                types.Int64Type,
@@ -226,7 +223,7 @@ func (c computeServerResource) Create(ctx context.Context, request tfsdk.CreateR
 		return
 	}
 
-	server, err := c.waitForServerRunning(ctx, order.Product.ID)
+	server, err := c.waitForServerStatus(ctx, order.Product.ID, compute.ServerStatusRunning, "running")
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for server to be running: %s", err))
 		if server.ID == 0 {
@@ -302,6 +299,15 @@ func (c computeServerResource) Update(ctx context.Context, request tfsdk.UpdateR
 		return
 	}
 
+	if plan.ProductID.Value != state.ProductID.Value {
+		resized, err := c.resize(ctx, server, int(plan.ProductID.Value))
+		if err != nil {
+			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to resize server: %s", err))
+			return
+		}
+		server = resized
+	}
+
 	if !plan.SecurityGroupIDs.Unknown && !plan.SecurityGroupIDs.Null && !plan.SecurityGroupIDs.Equal(state.SecurityGroupIDs) {
 		if err := c.updateSecurityGroups(ctx, server, plan.SecurityGroupIDs); err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security groups: %s", err))
@@ -337,8 +343,8 @@ func (c computeServerResource) Delete(ctx context.Context, request tfsdk.DeleteR
 
 // the order is already processed while the server is still booting —
 // attaching volumes or network interfaces in that window is refused by the api
-func (c computeServerResource) waitForServerRunning(ctx context.Context, serverID int) (server compute.Server, err error) {
-	err = waitFor(ctx, serverBootTimeout, defaultWaitInterval, fmt.Sprintf("server %d to be running", serverID), func(ctx context.Context) (bool, error) {
+func (c computeServerResource) waitForServerStatus(ctx context.Context, serverID int, want int, name string) (server compute.Server, err error) {
+	err = waitFor(ctx, serverBootTimeout, defaultWaitInterval, fmt.Sprintf("server %d to be %s", serverID, name), func(ctx context.Context) (bool, error) {
 		got, err := c.serverService.Get(ctx, serverID)
 		if err != nil {
 			return false, err
@@ -346,7 +352,7 @@ func (c computeServerResource) waitForServerRunning(ctx context.Context, serverI
 		server = got
 
 		switch server.Status.ID {
-		case compute.ServerStatusRunning:
+		case want:
 			return true, nil
 		case compute.ServerStatusError:
 			return false, fmt.Errorf("server %d is in error state", serverID)
@@ -397,4 +403,61 @@ func (c computeServerResource) readSecurityGroups(ctx context.Context, server co
 		}
 	}
 	return nil
+}
+
+const (
+	serverActionStart = "start"
+	serverActionStop  = "stop"
+)
+
+// the api resizes only a stopped server: stop, upgrade (an order), start —
+// a server the user keeps stopped stays stopped
+func (c computeServerResource) resize(ctx context.Context, server compute.Server, productID int) (compute.Server, error) {
+	wasStopped := server.Status.ID == compute.ServerStatusStopped
+	if !wasStopped {
+		if err := c.perform(ctx, server.ID, serverActionStop); err != nil {
+			return server, err
+		}
+		if _, err := c.waitForServerStatus(ctx, server.ID, compute.ServerStatusStopped, "stopped"); err != nil {
+			return server, err
+		}
+	}
+
+	var ordering common.Ordering
+	err := retry(ctx, "upgrade server", func() (err error) {
+		ordering, err = c.serverService.Upgrade(ctx, server.ID, compute.ServerUpgrade{ProductID: productID})
+		return err
+	})
+	if err == nil {
+		_, err = waitForOrder(ctx, c.orderService, ordering)
+	}
+	if err == nil {
+		// the server passes through upgrading and comes back stopped
+		_, err = c.waitForServerStatus(ctx, server.ID, compute.ServerStatusStopped, "stopped")
+	}
+
+	if wasStopped {
+		if err != nil {
+			return server, err
+		}
+		return c.serverService.Get(ctx, server.ID)
+	}
+
+	// started again even after a failed upgrade — a resize must not leave a
+	// stopped server behind
+	if startErr := c.perform(ctx, server.ID, serverActionStart); startErr != nil && err == nil {
+		err = startErr
+	}
+	running, waitErr := c.waitForServerStatus(ctx, server.ID, compute.ServerStatusRunning, "running")
+	if err != nil {
+		return running, err
+	}
+	return running, waitErr
+}
+
+func (c computeServerResource) perform(ctx context.Context, serverID int, action string) error {
+	return retry(ctx, action+" server", func() (err error) {
+		_, err = c.serverService.Perform(ctx, serverID, compute.ServerPerform{Action: action})
+		return err
+	})
 }

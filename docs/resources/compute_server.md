@@ -20,7 +20,7 @@ description: |-
 - `image_id` (Number) unique identifier of the image
 - `location_id` (Number) unique identifier of the location
 - `name` (String) name of the server
-- `product_id` (Number) unique identifier of the product
+- `product_id` (Number) unique identifier of the product — changing it resizes the server in place: it is stopped, resized and started again (about a minute of downtime), disks and addresses are kept
 
 ### Optional
 
