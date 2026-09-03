@@ -5,16 +5,21 @@ import (
 	"fmt"
 
 	"github.com/flowswiss/goclient/macbaremetal"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ tfsdk.ResourceType            = (*macBareMetalNetworkResourceType)(nil)
-	_ tfsdk.Resource                = (*macBareMetalNetworkResource)(nil)
-	_ tfsdk.ResourceWithImportState = (*macBareMetalNetworkResource)(nil)
+	_ resource.Resource                = (*macBareMetalNetworkResource)(nil)
+	_ resource.ResourceWithConfigure   = (*macBareMetalNetworkResource)(nil)
+	_ resource.ResourceWithImportState = (*macBareMetalNetworkResource)(nil)
 )
 
 type macBareMetalNetworkResourceAllocationPool struct {
@@ -34,125 +39,119 @@ type macBareMetalNetworkResourceData struct {
 }
 
 func (r *macBareMetalNetworkResourceData) FromEntity(network macbaremetal.Network) {
-	r.ID = types.Int64{Value: int64(network.ID)}
-	r.Name = types.String{Value: network.Name}
-	r.CIDR = types.String{Value: network.Subnet}
-	r.LocationID = types.Int64{Value: int64(network.Location.ID)}
-	r.GatewayIP = types.String{Value: network.GatewayIP}
+	r.ID = types.Int64Value(int64(network.ID))
+	r.Name = types.StringValue(network.Name)
+	r.CIDR = types.StringValue(network.Subnet)
+	r.LocationID = types.Int64Value(int64(network.Location.ID))
+	r.GatewayIP = types.StringValue(network.GatewayIP)
 
 	r.AllocationPool = &macBareMetalNetworkResourceAllocationPool{
-		Start: types.String{Value: network.AllocationPoolStart},
-		End:   types.String{Value: network.AllocationPoolEnd},
+		Start: types.StringValue(network.AllocationPoolStart),
+		End:   types.StringValue(network.AllocationPoolEnd),
 	}
 
-	r.DomainName = types.String{Value: network.DomainName}
+	r.DomainName = types.StringValue(network.DomainName)
 	r.DomainNameServers = make([]types.String, len(network.DomainNameServers))
 	for idx, domainNameServer := range network.DomainNameServers {
-		r.DomainNameServers[idx] = types.String{Value: domainNameServer}
+		r.DomainNameServers[idx] = types.StringValue(domainNameServer)
 	}
 }
 
-type macBareMetalNetworkResourceType struct{}
-
-func (r macBareMetalNetworkResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (r macBareMetalNetworkResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the network",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the network",
 				Required:            true,
 			},
-			"cidr": {
-				Type:                types.StringType,
+			"cidr": schema.StringAttribute{
 				MarkdownDescription: "CIDR of the network",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"location_id": {
-				Type:                types.Int64Type,
+			"location_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the location",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"domain_name": {
-				Type:                types.StringType,
+			"domain_name": schema.StringAttribute{
 				MarkdownDescription: "domain name of the network",
 				Optional:            true,
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"domain_name_servers": {
-				Type: types.ListType{
-					ElemType: types.StringType,
-				},
+			"domain_name_servers": schema.ListAttribute{
+				ElementType:         types.StringType,
 				MarkdownDescription: "list of domain name servers",
 				Optional:            true,
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"allocation_pool": {
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"start": {
-						Type:                types.StringType,
+			"allocation_pool": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"start": schema.StringAttribute{
 						MarkdownDescription: "start of the allocation pool",
 						Computed:            true,
 					},
-					"end": {
-						Type:                types.StringType,
+					"end": schema.StringAttribute{
 						MarkdownDescription: "end of the allocation pool",
 						Computed:            true,
 					},
-				}),
+				},
 				MarkdownDescription: "allocation pool",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"gateway_ip": {
-				Type:                types.StringType,
+			"gateway_ip": schema.StringAttribute{
 				MarkdownDescription: "gateway IP of the network",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (r macBareMetalNetworkResourceType) NewResource(ctx context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newMacBareMetalNetworkResource() resource.Resource {
+	return &macBareMetalNetworkResource{}
+}
+
+func (r *macBareMetalNetworkResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_mac_bare_metal_network"
+}
+
+func (r *macBareMetalNetworkResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return macBareMetalNetworkResource{
-		networkService: macbaremetal.NewNetworkService(prov.client),
-	}, diagnostics
+	r.networkService = macbaremetal.NewNetworkService(client)
 }
 
 type macBareMetalNetworkResource struct {
 	networkService macbaremetal.NetworkService
 }
 
-func (r macBareMetalNetworkResource) Create(ctx context.Context, request tfsdk.CreateResourceRequest, response *tfsdk.CreateResourceResponse) {
+func (r macBareMetalNetworkResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var config macBareMetalNetworkResourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
@@ -161,8 +160,8 @@ func (r macBareMetalNetworkResource) Create(ctx context.Context, request tfsdk.C
 	}
 
 	create := macbaremetal.NetworkCreate{
-		Name:       config.Name.Value,
-		LocationID: int(config.LocationID.Value),
+		Name:       config.Name.ValueString(),
+		LocationID: int(config.LocationID.ValueInt64()),
 	}
 
 	network, err := r.networkService.Create(ctx, create)
@@ -173,14 +172,14 @@ func (r macBareMetalNetworkResource) Create(ctx context.Context, request tfsdk.C
 
 	// the api does not allow to set these properties on creation,
 	// so we need to set afterwards using an update.
-	if len(config.DomainNameServers) != 0 || !config.DomainName.Null {
+	if len(config.DomainNameServers) != 0 || !config.DomainName.IsNull() {
 		update := macbaremetal.NetworkUpdate{
-			DomainName:        config.DomainName.Value,
+			DomainName:        config.DomainName.ValueString(),
 			DomainNameServers: nil,
 		}
 
 		for _, domainNameServer := range config.DomainNameServers {
-			update.DomainNameServers = append(update.DomainNameServers, domainNameServer.Value)
+			update.DomainNameServers = append(update.DomainNameServers, domainNameServer.ValueString())
 		}
 
 		network, err = r.networkService.Update(ctx, network.ID, update)
@@ -197,7 +196,7 @@ func (r macBareMetalNetworkResource) Create(ctx context.Context, request tfsdk.C
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r macBareMetalNetworkResource) Read(ctx context.Context, request tfsdk.ReadResourceRequest, response *tfsdk.ReadResourceResponse) {
+func (r macBareMetalNetworkResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state macBareMetalNetworkResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -205,7 +204,7 @@ func (r macBareMetalNetworkResource) Read(ctx context.Context, request tfsdk.Rea
 		return
 	}
 
-	network, err := r.networkService.Get(ctx, int(state.ID.Value))
+	network, err := r.networkService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get network: %s", err))
 		return
@@ -217,7 +216,7 @@ func (r macBareMetalNetworkResource) Read(ctx context.Context, request tfsdk.Rea
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r macBareMetalNetworkResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {
+func (r macBareMetalNetworkResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var state macBareMetalNetworkResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -233,18 +232,18 @@ func (r macBareMetalNetworkResource) Update(ctx context.Context, request tfsdk.U
 	}
 
 	update := macbaremetal.NetworkUpdate{
-		Name:       config.Name.Value,
-		DomainName: config.DomainName.Value,
+		Name:       config.Name.ValueString(),
+		DomainName: config.DomainName.ValueString(),
 	}
 
 	if len(config.DomainNameServers) != 0 {
 		update.DomainNameServers = make([]string, len(config.DomainNameServers))
 		for idx, domainNameServer := range config.DomainNameServers {
-			update.DomainNameServers[idx] = domainNameServer.Value
+			update.DomainNameServers[idx] = domainNameServer.ValueString()
 		}
 	}
 
-	network, err := r.networkService.Update(ctx, int(state.ID.Value), update)
+	network, err := r.networkService.Update(ctx, int(state.ID.ValueInt64()), update)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update network: %s", err))
 		return
@@ -256,7 +255,7 @@ func (r macBareMetalNetworkResource) Update(ctx context.Context, request tfsdk.U
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r macBareMetalNetworkResource) Delete(ctx context.Context, request tfsdk.DeleteResourceRequest, response *tfsdk.DeleteResourceResponse) {
+func (r macBareMetalNetworkResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state macBareMetalNetworkResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -264,13 +263,13 @@ func (r macBareMetalNetworkResource) Delete(ctx context.Context, request tfsdk.D
 		return
 	}
 
-	err := r.networkService.Delete(ctx, int(state.ID.Value))
+	err := r.networkService.Delete(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete network: %s", err))
 		return
 	}
 }
 
-func (r macBareMetalNetworkResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+func (r macBareMetalNetworkResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
