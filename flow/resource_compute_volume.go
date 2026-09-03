@@ -6,18 +6,20 @@ import (
 	"time"
 
 	"github.com/flowswiss/goclient/compute"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var (
-	_ tfsdk.ResourceType            = (*computeVolumeResourceType)(nil)
-	_ tfsdk.Resource                = (*computeVolumeResource)(nil)
-	_ tfsdk.ResourceWithImportState = (*computeVolumeResource)(nil)
+	_ resource.Resource                = (*computeVolumeResource)(nil)
+	_ resource.ResourceWithConfigure   = (*computeVolumeResource)(nil)
+	_ resource.ResourceWithImportState = (*computeVolumeResource)(nil)
 )
 
 type computeVolumeResourceData struct {
@@ -30,87 +32,85 @@ type computeVolumeResourceData struct {
 }
 
 func (d *computeVolumeResourceData) FromEntity(volume compute.Volume) {
-	d.ID = types.Int64{Value: int64(volume.ID)}
-	d.SerialNumber = types.String{Value: volume.SerialNumber}
-	d.Name = types.String{Value: volume.Name}
-	d.Size = types.Int64{Value: int64(volume.Size)}
-	d.Location = types.Int64{Value: int64(volume.Location.ID)}
+	d.ID = types.Int64Value(int64(volume.ID))
+	d.SerialNumber = types.StringValue(volume.SerialNumber)
+	d.Name = types.StringValue(volume.Name)
+	d.Size = types.Int64Value(int64(volume.Size))
+	d.Location = types.Int64Value(int64(volume.Location.ID))
 }
 
-type computeVolumeResourceType struct{}
-
-func (t computeVolumeResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (t computeVolumeResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the volume",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"serial_number": {
-				Type:                types.StringType,
+			"serial_number": schema.StringAttribute{
 				MarkdownDescription: "unique serial number of the volume",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the volume",
 				Required:            true,
 			},
-			"size": {
-				Type:                types.Int64Type,
+			"size": schema.Int64Attribute{
 				MarkdownDescription: "size in GiB of the volume",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
+				PlanModifiers: []planmodifier.Int64{
 					// TODO not sure whether this should trigger a recreate since the data on the volume will be lost
-					tfsdk.RequiresReplaceIf(func(ctx context.Context, state, config attr.Value, path path.Path) (bool, diag.Diagnostics) {
-						return state.(types.Int64).Value > config.(types.Int64).Value, nil
+					int64planmodifier.RequiresReplaceIf(func(ctx context.Context, request planmodifier.Int64Request, response *int64planmodifier.RequiresReplaceIfFuncResponse) {
+						response.RequiresReplace = request.StateValue.ValueInt64() > request.PlanValue.ValueInt64()
 					}, "", "volume size cannot be decreased"),
 				},
 			},
-			"location_id": {
-				Type:                types.Int64Type,
+			"location_id": schema.Int64Attribute{
 				MarkdownDescription: "identifier of the location of the volume",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"restore_from_snapshot_id": {
-				Type:                types.Int64Type,
+			"restore_from_snapshot_id": schema.Int64Attribute{
 				MarkdownDescription: "restore the volume from the snapshot",
 				Optional:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (t computeVolumeResourceType) NewResource(ctx context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newComputeVolumeResource() resource.Resource {
+	return &computeVolumeResource{}
+}
+
+func (r *computeVolumeResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_compute_volume"
+}
+
+func (r *computeVolumeResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return computeVolumeResource{
-		volumeService: compute.NewVolumeService(prov.client),
-	}, diagnostics
+	r.volumeService = compute.NewVolumeService(client)
 }
 
 type computeVolumeResource struct {
 	volumeService compute.VolumeService
 }
 
-func (r computeVolumeResource) Create(ctx context.Context, request tfsdk.CreateResourceRequest, response *tfsdk.CreateResourceResponse) {
+func (r computeVolumeResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var config computeVolumeResourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
@@ -119,10 +119,10 @@ func (r computeVolumeResource) Create(ctx context.Context, request tfsdk.CreateR
 	}
 
 	create := compute.VolumeCreate{
-		Name:       config.Name.Value,
-		Size:       int(config.Size.Value),
-		LocationID: int(config.Location.Value),
-		SnapshotID: int(config.Snapshot.Value),
+		Name:       config.Name.ValueString(),
+		Size:       int(config.Size.ValueInt64()),
+		LocationID: int(config.Location.ValueInt64()),
+		SnapshotID: int(config.Snapshot.ValueInt64()),
 	}
 
 	var volume compute.Volume
@@ -159,7 +159,7 @@ func (r computeVolumeResource) Create(ctx context.Context, request tfsdk.CreateR
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r computeVolumeResource) Read(ctx context.Context, request tfsdk.ReadResourceRequest, response *tfsdk.ReadResourceResponse) {
+func (r computeVolumeResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state computeVolumeResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -167,10 +167,10 @@ func (r computeVolumeResource) Read(ctx context.Context, request tfsdk.ReadResou
 		return
 	}
 
-	volume, err := r.volumeService.Get(ctx, int(state.ID.Value))
+	volume, err := r.volumeService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
 		if isNotFound(err) {
-			removeGone(ctx, response, fmt.Sprintf("volume %d", state.ID.Value))
+			removeGone(ctx, response, fmt.Sprintf("volume %d", state.ID.ValueInt64()))
 			return
 		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get volume: %s", err))
@@ -183,7 +183,7 @@ func (r computeVolumeResource) Read(ctx context.Context, request tfsdk.ReadResou
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {
+func (r computeVolumeResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var state computeVolumeResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -198,7 +198,7 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 		return
 	}
 
-	volume, err := r.volumeService.Get(ctx, int(state.ID.Value))
+	volume, err := r.volumeService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get volume: %s", err))
 		return
@@ -212,11 +212,11 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 		})
 
 		update := compute.VolumeUpdate{
-			Name: plan.Name.Value,
+			Name: plan.Name.ValueString(),
 		}
 
 		err = retry(ctx, "update volume", func() (err error) {
-			volume, err = r.volumeService.Update(ctx, int(state.ID.Value), update)
+			volume, err = r.volumeService.Update(ctx, int(state.ID.ValueInt64()), update)
 			return err
 		})
 		if err != nil {
@@ -233,11 +233,11 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 		})
 
 		expand := compute.VolumeExpand{
-			Size: int(plan.Size.Value),
+			Size: int(plan.Size.ValueInt64()),
 		}
 
 		err = retry(ctx, "expand volume", func() (err error) {
-			volume, err = r.volumeService.Expand(ctx, int(state.ID.Value), expand)
+			volume, err = r.volumeService.Expand(ctx, int(state.ID.ValueInt64()), expand)
 			return err
 		})
 		if err != nil {
@@ -245,7 +245,7 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 			return
 		}
 
-		volume, err = r.waitForVolumeSettled(ctx, int(state.ID.Value), volumeSettleTimeout)
+		volume, err = r.waitForVolumeSettled(ctx, int(state.ID.ValueInt64()), volumeSettleTimeout)
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume to settle: %s", err))
 			return
@@ -258,7 +258,7 @@ func (r computeVolumeResource) Update(ctx context.Context, request tfsdk.UpdateR
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r computeVolumeResource) Delete(ctx context.Context, request tfsdk.DeleteResourceRequest, response *tfsdk.DeleteResourceResponse) {
+func (r computeVolumeResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state computeVolumeResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -267,7 +267,7 @@ func (r computeVolumeResource) Delete(ctx context.Context, request tfsdk.DeleteR
 	}
 
 	err := retryDelete(ctx, "delete volume", func() error {
-		return r.volumeService.Delete(ctx, int(state.ID.Value))
+		return r.volumeService.Delete(ctx, int(state.ID.ValueInt64()))
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete volume: %s", err))
@@ -275,7 +275,7 @@ func (r computeVolumeResource) Delete(ctx context.Context, request tfsdk.DeleteR
 	}
 }
 
-func (r computeVolumeResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+func (r computeVolumeResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 

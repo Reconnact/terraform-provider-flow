@@ -6,16 +6,19 @@ import (
 
 	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/compute"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ tfsdk.ResourceType            = (*computeLoadBalancerResourceType)(nil)
-	_ tfsdk.Resource                = (*computeLoadBalancerResource)(nil)
-	_ tfsdk.ResourceWithImportState = (*computeLoadBalancerResource)(nil)
+	_ resource.Resource                = (*computeLoadBalancerResource)(nil)
+	_ resource.ResourceWithConfigure   = (*computeLoadBalancerResource)(nil)
+	_ resource.ResourceWithImportState = (*computeLoadBalancerResource)(nil)
 )
 
 type computeLoadBalancerResourceData struct {
@@ -27,77 +30,76 @@ type computeLoadBalancerResourceData struct {
 }
 
 func (c *computeLoadBalancerResourceData) FromEntity(loadBalancer compute.LoadBalancer) {
-	c.ID = types.Int64{Value: int64(loadBalancer.ID)}
-	c.Name = types.String{Value: loadBalancer.Name}
-	c.LocationID = types.Int64{Value: int64(loadBalancer.Location.ID)}
+	c.ID = types.Int64Value(int64(loadBalancer.ID))
+	c.Name = types.StringValue(loadBalancer.Name)
+	c.LocationID = types.Int64Value(int64(loadBalancer.Location.ID))
 
 	if len(loadBalancer.Networks) != 0 {
 		network := loadBalancer.Networks[0]
-		c.NetworkID = types.Int64{Value: int64(network.ID)}
-		c.PrivateIP = types.String{Value: network.Interfaces[0].PrivateIP}
+		c.NetworkID = types.Int64Value(int64(network.ID))
+		c.PrivateIP = types.StringValue(network.Interfaces[0].PrivateIP)
 	}
 }
 
-type computeLoadBalancerResourceType struct{}
-
-func (c computeLoadBalancerResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (c computeLoadBalancerResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the load balancer",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the load balancer",
 				Required:            true,
 			},
-			"location_id": {
-				Type:                types.Int64Type,
+			"location_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the location",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"network_id": {
-				Type:                types.Int64Type,
+			"network_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the initial network (the organisation's default network when omitted)",
 				Optional:            true,
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"private_ip": {
-				Type:                types.StringType,
+			"private_ip": schema.StringAttribute{
 				MarkdownDescription: "initial private ip of the load balancer",
 				Optional:            true,
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (c computeLoadBalancerResourceType) NewResource(ctx context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newComputeLoadBalancerResource() resource.Resource {
+	return &computeLoadBalancerResource{}
+}
+
+func (c *computeLoadBalancerResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_compute_load_balancer"
+}
+
+func (c *computeLoadBalancerResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return computeLoadBalancerResource{
-		loadBalancerService: compute.NewLoadBalancerService(prov.client),
-		orderService:        common.NewOrderService(prov.client),
-	}, diagnostics
+	c.loadBalancerService = compute.NewLoadBalancerService(client)
+	c.orderService = common.NewOrderService(client)
 }
 
 type computeLoadBalancerResource struct {
@@ -105,7 +107,7 @@ type computeLoadBalancerResource struct {
 	orderService        common.OrderService
 }
 
-func (c computeLoadBalancerResource) Create(ctx context.Context, request tfsdk.CreateResourceRequest, response *tfsdk.CreateResourceResponse) {
+func (c computeLoadBalancerResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var config computeLoadBalancerResourceData
 	response.Diagnostics.Append(request.Config.Get(ctx, &config)...)
 	if response.Diagnostics.HasError() {
@@ -113,11 +115,11 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request tfsdk.C
 	}
 
 	create := compute.LoadBalancerCreate{
-		Name:             config.Name.Value,
-		LocationID:       int(config.LocationID.Value),
+		Name:             config.Name.ValueString(),
+		LocationID:       int(config.LocationID.ValueInt64()),
 		AttachExternalIP: false,
-		NetworkID:        int(config.NetworkID.Value),
-		PrivateIP:        config.PrivateIP.Value,
+		NetworkID:        int(config.NetworkID.ValueInt64()),
+		PrivateIP:        config.PrivateIP.ValueString(),
 	}
 
 	var ordering common.Ordering
@@ -150,17 +152,17 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request tfsdk.C
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }
 
-func (c computeLoadBalancerResource) Read(ctx context.Context, request tfsdk.ReadResourceRequest, response *tfsdk.ReadResourceResponse) {
+func (c computeLoadBalancerResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state computeLoadBalancerResourceData
 	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	loadBalancer, err := c.loadBalancerService.Get(ctx, int(state.ID.Value))
+	loadBalancer, err := c.loadBalancerService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
 		if isNotFound(err) {
-			removeGone(ctx, response, fmt.Sprintf("load balancer %d", state.ID.Value))
+			removeGone(ctx, response, fmt.Sprintf("load balancer %d", state.ID.ValueInt64()))
 			return
 		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get load balancer: %s", err))
@@ -172,7 +174,7 @@ func (c computeLoadBalancerResource) Read(ctx context.Context, request tfsdk.Rea
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }
 
-func (c computeLoadBalancerResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {
+func (c computeLoadBalancerResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var state computeLoadBalancerResourceData
 	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
 	if response.Diagnostics.HasError() {
@@ -186,12 +188,12 @@ func (c computeLoadBalancerResource) Update(ctx context.Context, request tfsdk.U
 	}
 
 	update := compute.LoadBalancerUpdate{
-		Name: config.Name.Value,
+		Name: config.Name.ValueString(),
 	}
 
 	var loadBalancer compute.LoadBalancer
 	err := retry(ctx, "update load balancer", func() (err error) {
-		loadBalancer, err = c.loadBalancerService.Update(ctx, int(state.ID.Value), update)
+		loadBalancer, err = c.loadBalancerService.Update(ctx, int(state.ID.ValueInt64()), update)
 		return err
 	})
 	if err != nil {
@@ -204,7 +206,7 @@ func (c computeLoadBalancerResource) Update(ctx context.Context, request tfsdk.U
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }
 
-func (c computeLoadBalancerResource) Delete(ctx context.Context, request tfsdk.DeleteResourceRequest, response *tfsdk.DeleteResourceResponse) {
+func (c computeLoadBalancerResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state computeLoadBalancerResourceData
 	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
 	if response.Diagnostics.HasError() {
@@ -212,7 +214,7 @@ func (c computeLoadBalancerResource) Delete(ctx context.Context, request tfsdk.D
 	}
 
 	err := retryDelete(ctx, "delete load balancer", func() error {
-		return c.loadBalancerService.Delete(ctx, int(state.ID.Value))
+		return c.loadBalancerService.Delete(ctx, int(state.ID.ValueInt64()))
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete load balancer: %s", err))
@@ -220,7 +222,7 @@ func (c computeLoadBalancerResource) Delete(ctx context.Context, request tfsdk.D
 	}
 }
 
-func (c computeLoadBalancerResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+func (c computeLoadBalancerResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 

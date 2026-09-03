@@ -6,16 +6,18 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ tfsdk.ResourceType            = (*computeKeyPairResourceType)(nil)
-	_ tfsdk.Resource                = (*computeKeyPairResource)(nil)
-	_ tfsdk.ResourceWithImportState = (*computeKeyPairResource)(nil)
+	_ resource.Resource                = (*computeKeyPairResource)(nil)
+	_ resource.ResourceWithConfigure   = (*computeKeyPairResource)(nil)
+	_ resource.ResourceWithImportState = (*computeKeyPairResource)(nil)
 )
 
 type computeKeyPairResourceData struct {
@@ -27,64 +29,64 @@ type computeKeyPairResourceData struct {
 }
 
 func (d *computeKeyPairResourceData) FromEntity(keyPair compute.KeyPair) {
-	d.ID = types.Int64{Value: int64(keyPair.ID)}
-	d.Fingerprint = types.String{Value: keyPair.Fingerprint}
-	d.Name = types.String{Value: keyPair.Name}
+	d.ID = types.Int64Value(int64(keyPair.ID))
+	d.Fingerprint = types.StringValue(keyPair.Fingerprint)
+	d.Name = types.StringValue(keyPair.Name)
 }
 
-type computeKeyPairResourceType struct{}
-
-func (c computeKeyPairResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (c computeKeyPairResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the key pair",
 				Computed:            true,
 			},
-			"fingerprint": {
-				Type:                types.StringType,
+			"fingerprint": schema.StringAttribute{
 				MarkdownDescription: "fingerprint of the public key",
 				Computed:            true,
 			},
 
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the key pair",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"public_key": {
-				Type:                types.StringType,
+			"public_key": schema.StringAttribute{
 				MarkdownDescription: "public key of the key pair",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
+				PlanModifiers: []planmodifier.String{
 					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
-					tfsdk.RequiresReplace(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (c computeKeyPairResourceType) NewResource(ctx context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newComputeKeyPairResource() resource.Resource {
+	return &computeKeyPairResource{}
+}
+
+func (c *computeKeyPairResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_compute_key_pair"
+}
+
+func (c *computeKeyPairResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return computeKeyPairResource{
-		keyPairService: compute.NewKeyPairService(prov.client),
-	}, diagnostics
+	c.keyPairService = compute.NewKeyPairService(client)
 }
 
 type computeKeyPairResource struct {
 	keyPairService compute.KeyPairService
 }
 
-func (c computeKeyPairResource) Create(ctx context.Context, request tfsdk.CreateResourceRequest, response *tfsdk.CreateResourceResponse) {
+func (c computeKeyPairResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var config computeKeyPairResourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
@@ -93,8 +95,8 @@ func (c computeKeyPairResource) Create(ctx context.Context, request tfsdk.Create
 	}
 
 	create := compute.KeyPairCreate{
-		Name:      config.Name.Value,
-		PublicKey: config.PublicKey.Value,
+		Name:      config.Name.ValueString(),
+		PublicKey: config.PublicKey.ValueString(),
 	}
 
 	var keyPair compute.KeyPair
@@ -117,7 +119,7 @@ func (c computeKeyPairResource) Create(ctx context.Context, request tfsdk.Create
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (c computeKeyPairResource) Read(ctx context.Context, request tfsdk.ReadResourceRequest, response *tfsdk.ReadResourceResponse) {
+func (c computeKeyPairResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state computeKeyPairResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -132,7 +134,7 @@ func (c computeKeyPairResource) Read(ctx context.Context, request tfsdk.ReadReso
 	}
 
 	for _, keyPair := range list.Items {
-		if keyPair.ID == int(state.ID.Value) {
+		if keyPair.ID == int(state.ID.ValueInt64()) {
 			state.FromEntity(keyPair)
 
 			diagnostics = response.State.Set(ctx, state)
@@ -141,14 +143,14 @@ func (c computeKeyPairResource) Read(ctx context.Context, request tfsdk.ReadReso
 		}
 	}
 
-	removeGone(ctx, response, fmt.Sprintf("key pair %d", state.ID.Value))
+	removeGone(ctx, response, fmt.Sprintf("key pair %d", state.ID.ValueInt64()))
 }
 
-func (c computeKeyPairResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {
+func (c computeKeyPairResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	response.Diagnostics.AddError("Not Supported", "updating a key pair is not supported")
 }
 
-func (c computeKeyPairResource) Delete(ctx context.Context, request tfsdk.DeleteResourceRequest, response *tfsdk.DeleteResourceResponse) {
+func (c computeKeyPairResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state computeKeyPairResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -157,7 +159,7 @@ func (c computeKeyPairResource) Delete(ctx context.Context, request tfsdk.Delete
 	}
 
 	err := retryDelete(ctx, "delete key pair", func() error {
-		return c.keyPairService.Delete(ctx, int(state.ID.Value))
+		return c.keyPairService.Delete(ctx, int(state.ID.ValueInt64()))
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete key pair: %s", err))
@@ -165,6 +167,6 @@ func (c computeKeyPairResource) Delete(ctx context.Context, request tfsdk.Delete
 	}
 }
 
-func (c computeKeyPairResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+func (c computeKeyPairResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }

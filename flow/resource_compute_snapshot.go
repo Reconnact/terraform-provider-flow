@@ -5,17 +5,19 @@ import (
 	"fmt"
 
 	"github.com/flowswiss/goclient/compute"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var (
-	_ tfsdk.ResourceType            = (*computeSnapshotResourceType)(nil)
-	_ tfsdk.Resource                = (*computeSnapshotResource)(nil)
-	_ tfsdk.ResourceWithImportState = (*computeSnapshotResource)(nil)
+	_ resource.Resource                = (*computeSnapshotResource)(nil)
+	_ resource.ResourceWithConfigure   = (*computeSnapshotResource)(nil)
+	_ resource.ResourceWithImportState = (*computeSnapshotResource)(nil)
 )
 
 type computeSnapshotResourceData struct {
@@ -28,71 +30,70 @@ type computeSnapshotResourceData struct {
 }
 
 func (d *computeSnapshotResourceData) FromEntity(snapshot compute.Snapshot) {
-	d.ID = types.Int64{Value: int64(snapshot.ID)}
-	d.Size = types.Int64{Value: int64(snapshot.Size)}
-	d.CreatedAt = types.String{Value: snapshot.CreatedAt.String()}
+	d.ID = types.Int64Value(int64(snapshot.ID))
+	d.Size = types.Int64Value(int64(snapshot.Size))
+	d.CreatedAt = types.StringValue(snapshot.CreatedAt.String())
 
-	d.Name = types.String{Value: snapshot.Name}
-	d.VolumeID = types.Int64{Value: int64(snapshot.Volume.ID)}
+	d.Name = types.StringValue(snapshot.Name)
+	d.VolumeID = types.Int64Value(int64(snapshot.Volume.ID))
 }
 
-type computeSnapshotResourceType struct{}
-
-func (t computeSnapshotResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (t computeSnapshotResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the snapshot",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"size": {
-				Type:                types.Int64Type,
+			"size": schema.Int64Attribute{
 				MarkdownDescription: "size of the snapshot in GiB",
 				Computed:            true,
 			},
-			"created_at": {
-				Type:                types.StringType,
+			"created_at": schema.StringAttribute{
 				MarkdownDescription: "date and time when the snapshot was created",
 				Computed:            true,
 			},
 
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the snapshot",
 				Required:            true,
 			},
-			"volume_id": {
-				Type:                types.Int64Type,
+			"volume_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the volume",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
 		},
-	}, nil
+	}
 }
 
-func (t computeSnapshotResourceType) NewResource(ctx context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newComputeSnapshotResource() resource.Resource {
+	return &computeSnapshotResource{}
+}
+
+func (r *computeSnapshotResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_compute_snapshot"
+}
+
+func (r *computeSnapshotResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return computeSnapshotResource{
-		snapshotService: compute.NewSnapshotService(prov.client),
-	}, diagnostics
+	r.snapshotService = compute.NewSnapshotService(client)
 }
 
 type computeSnapshotResource struct {
 	snapshotService compute.SnapshotService
 }
 
-func (r computeSnapshotResource) Create(ctx context.Context, request tfsdk.CreateResourceRequest, response *tfsdk.CreateResourceResponse) {
+func (r computeSnapshotResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var config computeSnapshotResourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
@@ -101,8 +102,8 @@ func (r computeSnapshotResource) Create(ctx context.Context, request tfsdk.Creat
 	}
 
 	create := compute.SnapshotCreate{
-		Name:     config.Name.Value,
-		VolumeID: int(config.VolumeID.Value),
+		Name:     config.Name.ValueString(),
+		VolumeID: int(config.VolumeID.ValueInt64()),
 	}
 
 	var snapshot compute.Snapshot
@@ -135,7 +136,7 @@ func (r computeSnapshotResource) Create(ctx context.Context, request tfsdk.Creat
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r computeSnapshotResource) Read(ctx context.Context, request tfsdk.ReadResourceRequest, response *tfsdk.ReadResourceResponse) {
+func (r computeSnapshotResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state computeSnapshotResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -143,10 +144,10 @@ func (r computeSnapshotResource) Read(ctx context.Context, request tfsdk.ReadRes
 		return
 	}
 
-	snapshot, err := r.snapshotService.Get(ctx, int(state.ID.Value))
+	snapshot, err := r.snapshotService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
 		if isNotFound(err) {
-			removeGone(ctx, response, fmt.Sprintf("snapshot %d", state.ID.Value))
+			removeGone(ctx, response, fmt.Sprintf("snapshot %d", state.ID.ValueInt64()))
 			return
 		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get snapshot: %s", err))
@@ -159,7 +160,7 @@ func (r computeSnapshotResource) Read(ctx context.Context, request tfsdk.ReadRes
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r computeSnapshotResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {
+func (r computeSnapshotResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var state computeSnapshotResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -185,12 +186,12 @@ func (r computeSnapshotResource) Update(ctx context.Context, request tfsdk.Updat
 	})
 
 	update := compute.SnapshotUpdate{
-		Name: config.Name.Value,
+		Name: config.Name.ValueString(),
 	}
 
 	var snapshot compute.Snapshot
 	err := retry(ctx, "update snapshot", func() (err error) {
-		snapshot, err = r.snapshotService.Update(ctx, int(state.ID.Value), update)
+		snapshot, err = r.snapshotService.Update(ctx, int(state.ID.ValueInt64()), update)
 		return err
 	})
 	if err != nil {
@@ -204,7 +205,7 @@ func (r computeSnapshotResource) Update(ctx context.Context, request tfsdk.Updat
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r computeSnapshotResource) Delete(ctx context.Context, request tfsdk.DeleteResourceRequest, response *tfsdk.DeleteResourceResponse) {
+func (r computeSnapshotResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state computeSnapshotResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -213,7 +214,7 @@ func (r computeSnapshotResource) Delete(ctx context.Context, request tfsdk.Delet
 	}
 
 	err := retryDelete(ctx, "delete snapshot", func() error {
-		return r.snapshotService.Delete(ctx, int(state.ID.Value))
+		return r.snapshotService.Delete(ctx, int(state.ID.ValueInt64()))
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete snapshot: %s", err))
@@ -221,7 +222,7 @@ func (r computeSnapshotResource) Delete(ctx context.Context, request tfsdk.Delet
 	}
 }
 
-func (r computeSnapshotResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+func (r computeSnapshotResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
