@@ -9,6 +9,8 @@ import (
 )
 
 func TestAccMacBareMetalSecurityGroupRule_Basic(t *testing.T) {
+	t.Skip("dev mocks the mac bare metal backend")
+
 	securityGroupName := acctest.RandomWithPrefix("test-security-group")
 
 	protocolNumber := "6"
@@ -17,7 +19,7 @@ func TestAccMacBareMetalSecurityGroupRule_Basic(t *testing.T) {
 	toPort := 22
 	ipRange := "1.1.1.1/32"
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -37,31 +39,33 @@ func TestAccMacBareMetalSecurityGroupRule_Basic(t *testing.T) {
 	})
 }
 
+// one mac bare metal network per org — see the security group test
 const testAccMacBareMetalSecurityGroupRuleConfigBasic = `
 data "flow_location" "zrh1" {
 	name = "ZRH1"
 }
 
-data "flow_mac_bare_metal_network" "foobar" {
+resource "flow_mac_bare_metal_network" "foobar" {
+	name        = "%[1]s"
 	location_id = data.flow_location.zrh1.id
 }
 
 resource "flow_mac_bare_metal_security_group" "foobar" {
-	name        = "%s"
-	network_id = data.flow_mac_bare_metal_network.foobar.id
+	name       = "%[1]s"
+	network_id = flow_mac_bare_metal_network.foobar.id
 }
 
 resource "flow_mac_bare_metal_security_group_rule" "foobar" {
 	security_group_id = flow_mac_bare_metal_security_group.foobar.id
 
 	direction = "ingress"
-	protocol  = { name = "%s" }
+	protocol  = { name = "%[2]s" }
 
 	port_range = {
-		from = %d
-		to   = %d
+		from = %[3]d
+		to   = %[4]d
 	}
 
-	ip_range = "%s"
+	ip_range = "%[5]s"
 }
 `

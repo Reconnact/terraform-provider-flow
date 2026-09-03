@@ -11,7 +11,7 @@ import (
 func TestAccComputeRouter_Basic(t *testing.T) {
 	routerName := acctest.RandomWithPrefix("test-router")
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

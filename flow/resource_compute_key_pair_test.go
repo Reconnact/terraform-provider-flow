@@ -15,7 +15,7 @@ func TestAccComputeKeyPair_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

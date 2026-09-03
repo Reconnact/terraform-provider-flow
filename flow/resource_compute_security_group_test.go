@@ -11,7 +11,7 @@ import (
 func TestAccComputeSecurityGroup_Basic(t *testing.T) {
 	securityGroupName := acctest.RandomWithPrefix("test-security-group")
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

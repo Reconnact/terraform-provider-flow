@@ -12,7 +12,7 @@ func TestAccComputeVolume_Basic(t *testing.T) {
 	volumeName := acctest.RandomWithPrefix("test-volume")
 	volumeSize := acctest.RandIntRange(1, 20)
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

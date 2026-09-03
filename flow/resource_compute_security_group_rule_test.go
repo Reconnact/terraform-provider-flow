@@ -17,7 +17,7 @@ func TestAccComputeSecurityGroupRule_Basic(t *testing.T) {
 	toPort := 22
 	ipRange := "1.1.1.1/32"
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

@@ -13,7 +13,7 @@ func TestAccComputeRouterInterface_Basic(t *testing.T) {
 	networkCIDR := "192.168.1.0/24"
 	routerName := acctest.RandomWithPrefix("test-router")
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

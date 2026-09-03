@@ -30,7 +30,7 @@ func TestAccComputeCertificate_Basic(t *testing.T) {
 	certBase64 := base64.StdEncoding.EncodeToString([]byte(cert))
 	privBase64 := base64.StdEncoding.EncodeToString([]byte(priv))
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{

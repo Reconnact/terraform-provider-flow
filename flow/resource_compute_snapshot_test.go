@@ -9,13 +9,12 @@ import (
 )
 
 func TestAccComputeSnapshot_Basic(t *testing.T) {
-	t.Skip("skipping test due to race condition during deletion in api")
 
 	volumeName := acctest.RandomWithPrefix("test-volume")
 	volumeSize := acctest.RandIntRange(1, 20)
 	snapshotName := acctest.RandomWithPrefix("test-snapshot")
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
