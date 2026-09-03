@@ -6,16 +6,16 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/macbaremetal"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/flowswiss/terraform-provider-flow/filter"
 )
 
 var (
-	_ tfsdk.DataSourceType = (*macBareMetalElasticIPDataSourceType)(nil)
-	_ tfsdk.DataSource     = (*macBareMetalElasticIPDataSource)(nil)
+	_ datasource.DataSource              = (*macBareMetalElasticIPDataSource)(nil)
+	_ datasource.DataSourceWithConfigure = (*macBareMetalElasticIPDataSource)(nil)
 )
 
 type macBareMetalElasticIPDataSourceData struct {
@@ -25,70 +25,71 @@ type macBareMetalElasticIPDataSourceData struct {
 }
 
 func (c *macBareMetalElasticIPDataSourceData) FromEntity(elasticIP macbaremetal.ElasticIP) {
-	c.ID = types.Int64{Value: int64(elasticIP.ID)}
-	c.LocationID = types.Int64{Value: int64(elasticIP.Location.ID)}
-	c.PublicIP = types.String{Value: elasticIP.PublicIP}
+	c.ID = types.Int64Value(int64(elasticIP.ID))
+	c.LocationID = types.Int64Value(int64(elasticIP.Location.ID))
+	c.PublicIP = types.StringValue(elasticIP.PublicIP)
 }
 
 func (c macBareMetalElasticIPDataSourceData) AppliesTo(elasticIP macbaremetal.ElasticIP) bool {
-	if !c.ID.Null && c.ID.Value != int64(elasticIP.ID) {
+	if !c.ID.IsNull() && c.ID.ValueInt64() != int64(elasticIP.ID) {
 		return false
 	}
 
-	if !c.LocationID.Null && c.LocationID.Value != int64(elasticIP.Location.ID) {
+	if !c.LocationID.IsNull() && c.LocationID.ValueInt64() != int64(elasticIP.Location.ID) {
 		return false
 	}
 
-	if !c.PublicIP.Null && c.PublicIP.Value != elasticIP.PublicIP {
+	if !c.PublicIP.IsNull() && c.PublicIP.ValueString() != elasticIP.PublicIP {
 		return false
 	}
 
 	return true
 }
 
-type macBareMetalElasticIPDataSourceType struct{}
-
-func (c macBareMetalElasticIPDataSourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (c macBareMetalElasticIPDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the elastic ip",
 				Optional:            true,
 				Computed:            true,
 			},
-			"location_id": {
-				Type:                types.Int64Type,
+			"location_id": schema.Int64Attribute{
 				MarkdownDescription: "location of the elastic ip",
 				Optional:            true,
 				Computed:            true,
 			},
-			"public_ip": {
-				Type:                types.StringType,
+			"public_ip": schema.StringAttribute{
 				MarkdownDescription: "public ip address",
 				Optional:            true,
 				Computed:            true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (c macBareMetalElasticIPDataSourceType) NewDataSource(ctx context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newMacBareMetalElasticIPDataSource() datasource.DataSource {
+	return &macBareMetalElasticIPDataSource{}
+}
+
+func (c *macBareMetalElasticIPDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_mac_bare_metal_elastic_ip"
+}
+
+func (c *macBareMetalElasticIPDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return macBareMetalElasticIPDataSource{
-		elasticIPService: macbaremetal.NewElasticIPService(prov.client),
-	}, diagnostics
+	c.elasticIPService = macbaremetal.NewElasticIPService(client)
 }
 
 type macBareMetalElasticIPDataSource struct {
 	elasticIPService macbaremetal.ElasticIPService
 }
 
-func (c macBareMetalElasticIPDataSource) Read(ctx context.Context, request tfsdk.ReadDataSourceRequest, response *tfsdk.ReadDataSourceResponse) {
+func (c macBareMetalElasticIPDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var config macBareMetalElasticIPDataSourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)

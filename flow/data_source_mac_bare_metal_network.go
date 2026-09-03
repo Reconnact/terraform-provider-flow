@@ -6,16 +6,16 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/macbaremetal"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/flowswiss/terraform-provider-flow/filter"
 )
 
 var (
-	_ tfsdk.DataSourceType = (*macBareMetalNetworkDataSourceType)(nil)
-	_ tfsdk.DataSource     = (*macBareMetalNetworkDataSource)(nil)
+	_ datasource.DataSource              = (*macBareMetalNetworkDataSource)(nil)
+	_ datasource.DataSourceWithConfigure = (*macBareMetalNetworkDataSource)(nil)
 )
 
 type macBareMetalNetworkDataSourceAllocationPool struct {
@@ -34,111 +34,106 @@ type macBareMetalNetworkDataSourceData struct {
 }
 
 func (c *macBareMetalNetworkDataSourceData) FromEntity(network macbaremetal.Network) {
-	c.ID = types.Int64{Value: int64(network.ID)}
-	c.Name = types.String{Value: network.Name}
-	c.CIDR = types.String{Value: network.Subnet}
-	c.LocationID = types.Int64{Value: int64(network.Location.ID)}
-	c.GatewayIP = types.String{Value: network.GatewayIP}
+	c.ID = types.Int64Value(int64(network.ID))
+	c.Name = types.StringValue(network.Name)
+	c.CIDR = types.StringValue(network.Subnet)
+	c.LocationID = types.Int64Value(int64(network.Location.ID))
+	c.GatewayIP = types.StringValue(network.GatewayIP)
 
 	c.AllocationPool = &macBareMetalNetworkDataSourceAllocationPool{
-		Start: types.String{Value: network.AllocationPoolStart},
-		End:   types.String{Value: network.AllocationPoolEnd},
+		Start: types.StringValue(network.AllocationPoolStart),
+		End:   types.StringValue(network.AllocationPoolEnd),
 	}
 
 	c.DomainNameServers = make([]types.String, len(network.DomainNameServers))
 	for idx, domainNameServer := range network.DomainNameServers {
-		c.DomainNameServers[idx] = types.String{Value: domainNameServer}
+		c.DomainNameServers[idx] = types.StringValue(domainNameServer)
 	}
 }
 
 func (c macBareMetalNetworkDataSourceData) AppliesTo(network macbaremetal.Network) bool {
-	if !c.ID.Null && network.ID != int(c.ID.Value) {
+	if !c.ID.IsNull() && network.ID != int(c.ID.ValueInt64()) {
 		return false
 	}
 
-	if !c.Name.Null && network.Name != c.Name.Value {
+	if !c.Name.IsNull() && network.Name != c.Name.ValueString() {
 		return false
 	}
 
 	return true
 }
 
-type macBareMetalNetworkDataSourceType struct{}
-
-func (c macBareMetalNetworkDataSourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (c macBareMetalNetworkDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the network",
 				Optional:            true,
 				Computed:            true,
 			},
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the network",
 				Optional:            true,
 				Computed:            true,
 			},
-			"cidr": {
-				Type:                types.StringType,
+			"cidr": schema.StringAttribute{
 				MarkdownDescription: "CIDR of the network",
 				Computed:            true,
 			},
-			"location_id": {
-				Type:                types.Int64Type,
+			"location_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the location",
 				Optional:            true,
 				Computed:            true,
 			},
-			"domain_name_servers": {
-				Type: types.ListType{
-					ElemType: types.StringType,
-				},
+			"domain_name_servers": schema.ListAttribute{
+				ElementType:         types.StringType,
 				MarkdownDescription: "list of domain name servers",
 				Computed:            true,
 			},
-			"allocation_pool": {
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"start": {
-						Type:                types.StringType,
+			"allocation_pool": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"start": schema.StringAttribute{
 						MarkdownDescription: "start of the allocation pool",
 						Computed:            true,
 					},
-					"end": {
-						Type:                types.StringType,
+					"end": schema.StringAttribute{
 						MarkdownDescription: "end of the allocation pool",
 						Computed:            true,
 					},
-				}),
+				},
 				MarkdownDescription: "allocation pool",
 				Computed:            true,
 			},
-			"gateway_ip": {
-				Type:                types.StringType,
+			"gateway_ip": schema.StringAttribute{
 				MarkdownDescription: "gateway IP of the network",
 				Computed:            true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (c macBareMetalNetworkDataSourceType) NewDataSource(ctx context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newMacBareMetalNetworkDataSource() datasource.DataSource {
+	return &macBareMetalNetworkDataSource{}
+}
+
+func (c *macBareMetalNetworkDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_mac_bare_metal_network"
+}
+
+func (c *macBareMetalNetworkDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return macBareMetalNetworkDataSource{
-		networkService: macbaremetal.NewNetworkService(prov.client),
-	}, diagnostics
+	c.networkService = macbaremetal.NewNetworkService(client)
 }
 
 type macBareMetalNetworkDataSource struct {
 	networkService macbaremetal.NetworkService
 }
 
-func (c macBareMetalNetworkDataSource) Read(ctx context.Context, request tfsdk.ReadDataSourceRequest, response *tfsdk.ReadDataSourceResponse) {
+func (c macBareMetalNetworkDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var config macBareMetalNetworkDataSourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)

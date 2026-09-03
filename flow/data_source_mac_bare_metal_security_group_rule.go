@@ -6,14 +6,14 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/macbaremetal"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ tfsdk.DataSourceType = (*macBareMetalSecurityGroupRuleDataSourceType)(nil)
-	_ tfsdk.DataSource     = (*macBareMetalSecurityGroupRuleDataSource)(nil)
+	_ datasource.DataSource              = (*macBareMetalSecurityGroupRuleDataSource)(nil)
+	_ datasource.DataSourceWithConfigure = (*macBareMetalSecurityGroupRuleDataSource)(nil)
 )
 
 type macBareMetalSecurityGroupRuleDataSourceProtocol struct {
@@ -22,10 +22,13 @@ type macBareMetalSecurityGroupRuleDataSourceProtocol struct {
 }
 
 func (c *macBareMetalSecurityGroupRuleDataSourceProtocol) FromNumber(number int) {
-	c.Number = types.Int64{Value: int64(number)}
+	c.Number = types.Int64Value(int64(number))
 
-	name, found := protocolNumberToName[number]
-	c.Name = types.String{Value: name, Null: !found}
+	if name, found := protocolNumberToName[number]; found {
+		c.Name = types.StringValue(name)
+	} else {
+		c.Name = types.StringNull()
+	}
 }
 
 type macBareMetalSecurityGroupRuleDataSourcePortRange struct {
@@ -52,135 +55,129 @@ type macBareMetalSecurityGroupRuleDataSourceData struct {
 }
 
 func (c *macBareMetalSecurityGroupRuleDataSourceData) FromEntity(securityGroupID int, rule macbaremetal.SecurityGroupRule) {
-	c.ID = types.Int64{Value: int64(rule.ID)}
-	c.SecurityGroupID = types.Int64{Value: int64(securityGroupID)}
+	c.ID = types.Int64Value(int64(rule.ID))
+	c.SecurityGroupID = types.Int64Value(int64(securityGroupID))
 
-	c.Direction = types.String{Value: rule.Direction}
+	c.Direction = types.StringValue(rule.Direction)
 	c.Protocol = &macBareMetalSecurityGroupRuleDataSourceProtocol{}
 	c.Protocol.FromNumber(rule.Protocol)
 
 	if rule.FromPort != 0 && rule.ToPort != 0 {
 		c.PortRange = &macBareMetalSecurityGroupRuleDataSourcePortRange{
-			From: types.Int64{Value: int64(rule.FromPort)},
-			To:   types.Int64{Value: int64(rule.ToPort)},
+			From: types.Int64Value(int64(rule.FromPort)),
+			To:   types.Int64Value(int64(rule.ToPort)),
 		}
 	}
 
 	if rule.ICMPType != 0 && rule.ICMPCode != 0 {
 		c.ICMP = &macBareMetalSecurityGroupRuleDataSourceICMP{
-			Type: types.Int64{Value: int64(rule.ICMPType)},
-			Code: types.Int64{Value: int64(rule.ICMPCode)},
+			Type: types.Int64Value(int64(rule.ICMPType)),
+			Code: types.Int64Value(int64(rule.ICMPCode)),
 		}
 	}
 
 	if rule.IPRange == "" {
-		c.IPRange = types.String{Null: true}
+		c.IPRange = types.StringNull()
 	} else {
-		c.IPRange = types.String{Value: rule.IPRange}
+		c.IPRange = types.StringValue(rule.IPRange)
 	}
 }
 
 func (c macBareMetalSecurityGroupRuleDataSourceData) AppliesTo(rule macbaremetal.SecurityGroupRule) bool {
-	if !c.ID.Null && c.ID.Value != int64(rule.ID) {
+	if !c.ID.IsNull() && c.ID.ValueInt64() != int64(rule.ID) {
 		return false
 	}
 
 	return true
 }
 
-type macBareMetalSecurityGroupRuleDataSourceType struct{}
-
-func (c macBareMetalSecurityGroupRuleDataSourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (c macBareMetalSecurityGroupRuleDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the security group rule",
 				Required:            true,
 			},
-			"security_group_id": {
-				Type:                types.Int64Type,
+			"security_group_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the security group",
 				Required:            true,
 			},
-			"direction": {
-				Type:                types.StringType,
+			"direction": schema.StringAttribute{
 				MarkdownDescription: "direction of the security group rule (ingress or egress)",
 				Computed:            true,
 			},
-			"protocol": {
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"number": {
-						Type:                types.Int64Type,
+			"protocol": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"number": schema.Int64Attribute{
 						MarkdownDescription: "iana protocol number of the security group rule",
 						Computed:            true,
 					},
-					"name": {
-						Type:                types.StringType,
+					"name": schema.StringAttribute{
 						MarkdownDescription: "protocol name of the security group rule",
 						Computed:            true,
 					},
-				}),
+				},
 				MarkdownDescription: "protocol of the security group rule",
 				Computed:            true,
 			},
-			"port_range": {
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"from": {
-						Type:                types.Int64Type,
+			"port_range": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"from": schema.Int64Attribute{
 						MarkdownDescription: "starting port of the security group rule",
 						Computed:            true,
 					},
-					"to": {
-						Type:                types.Int64Type,
+					"to": schema.Int64Attribute{
 						MarkdownDescription: "ending port of the security group rule",
 						Computed:            true,
 					},
-				}),
+				},
 				MarkdownDescription: "port range of the security group rule",
 				Computed:            true,
 			},
-			"icmp": {
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"type": {
-						Type:                types.Int64Type,
+			"icmp": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"type": schema.Int64Attribute{
 						MarkdownDescription: "type of the ICMP message",
 						Computed:            true,
 					},
-					"code": {
-						Type:                types.Int64Type,
+					"code": schema.Int64Attribute{
 						MarkdownDescription: "code of the ICMP message",
 						Computed:            true,
 					},
-				}),
+				},
 				MarkdownDescription: "ICMP message of the security group rule",
 				Computed:            true,
 			},
-			"ip_range": {
-				Type:                types.StringType,
+			"ip_range": schema.StringAttribute{
 				MarkdownDescription: "ip range of the security group rule",
 				Computed:            true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (c macBareMetalSecurityGroupRuleDataSourceType) NewDataSource(ctx context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newMacBareMetalSecurityGroupRuleDataSource() datasource.DataSource {
+	return &macBareMetalSecurityGroupRuleDataSource{}
+}
+
+func (c *macBareMetalSecurityGroupRuleDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_mac_bare_metal_security_group_rule"
+}
+
+func (c *macBareMetalSecurityGroupRuleDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return macBareMetalSecurityGroupRuleDataSource{
-		securityGroupService: macbaremetal.NewSecurityGroupService(prov.client),
-	}, diagnostics
+	c.securityGroupService = macbaremetal.NewSecurityGroupService(client)
 }
 
 type macBareMetalSecurityGroupRuleDataSource struct {
 	securityGroupService macbaremetal.SecurityGroupService
 }
 
-func (c macBareMetalSecurityGroupRuleDataSource) Read(ctx context.Context, request tfsdk.ReadDataSourceRequest, response *tfsdk.ReadDataSourceResponse) {
+func (c macBareMetalSecurityGroupRuleDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var config macBareMetalSecurityGroupRuleDataSourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
@@ -188,8 +185,8 @@ func (c macBareMetalSecurityGroupRuleDataSource) Read(ctx context.Context, reque
 		return
 	}
 
-	securityGroupID := int(config.SecurityGroupID.Value)
-	ruleID := int(config.ID.Value)
+	securityGroupID := int(config.SecurityGroupID.ValueInt64())
+	ruleID := int(config.ID.ValueInt64())
 
 	list, err := c.securityGroupService.Rules(securityGroupID).List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {

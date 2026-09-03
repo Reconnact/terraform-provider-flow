@@ -6,16 +6,16 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/flowswiss/terraform-provider-flow/filter"
 )
 
 var (
-	_ tfsdk.DataSourceType = (*computeVolumeDataSourceType)(nil)
-	_ tfsdk.DataSource     = (*computeVolumeDataSource)(nil)
+	_ datasource.DataSource              = (*computeVolumeDataSource)(nil)
+	_ datasource.DataSourceWithConfigure = (*computeVolumeDataSource)(nil)
 )
 
 type computeVolumeDataSourceData struct {
@@ -27,87 +27,86 @@ type computeVolumeDataSourceData struct {
 }
 
 func (c *computeVolumeDataSourceData) FromEntity(volume compute.Volume) {
-	c.ID = types.Int64{Value: int64(volume.ID)}
-	c.SerialNumber = types.String{Value: volume.SerialNumber}
-	c.Name = types.String{Value: volume.Name}
-	c.Size = types.Int64{Value: int64(volume.Size)}
-	c.LocationID = types.Int64{Value: int64(volume.Location.ID)}
+	c.ID = types.Int64Value(int64(volume.ID))
+	c.SerialNumber = types.StringValue(volume.SerialNumber)
+	c.Name = types.StringValue(volume.Name)
+	c.Size = types.Int64Value(int64(volume.Size))
+	c.LocationID = types.Int64Value(int64(volume.Location.ID))
 }
 
 func (c computeVolumeDataSourceData) AppliesTo(volume compute.Volume) bool {
-	if !c.ID.Null && c.ID.Value != int64(volume.ID) {
+	if !c.ID.IsNull() && c.ID.ValueInt64() != int64(volume.ID) {
 		return false
 	}
 
-	if !c.SerialNumber.Null && c.SerialNumber.Value != volume.SerialNumber {
+	if !c.SerialNumber.IsNull() && c.SerialNumber.ValueString() != volume.SerialNumber {
 		return false
 	}
 
-	if !c.Name.Null && c.Name.Value != volume.Name {
+	if !c.Name.IsNull() && c.Name.ValueString() != volume.Name {
 		return false
 	}
 
-	if !c.LocationID.Null && c.LocationID.Value != int64(volume.Location.ID) {
+	if !c.LocationID.IsNull() && c.LocationID.ValueInt64() != int64(volume.Location.ID) {
 		return false
 	}
 
 	return true
 }
 
-type computeVolumeDataSourceType struct{}
-
-func (c computeVolumeDataSourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (c computeVolumeDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the volume",
 				Optional:            true,
 				Computed:            true,
 			},
-			"serial_number": {
-				Type:                types.StringType,
+			"serial_number": schema.StringAttribute{
 				MarkdownDescription: "unique serial number of the volume",
 				Optional:            true,
 				Computed:            true,
 			},
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the volume",
 				Optional:            true,
 				Computed:            true,
 			},
-			"size": {
-				Type:                types.Int64Type,
+			"size": schema.Int64Attribute{
 				MarkdownDescription: "size in GiB of the volume",
 				Computed:            true,
 			},
-			"location_id": {
-				Type:                types.Int64Type,
+			"location_id": schema.Int64Attribute{
 				MarkdownDescription: "identifier of the location of the volume",
 				Optional:            true,
 				Computed:            true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (c computeVolumeDataSourceType) NewDataSource(ctx context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newComputeVolumeDataSource() datasource.DataSource {
+	return &computeVolumeDataSource{}
+}
+
+func (c *computeVolumeDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_compute_volume"
+}
+
+func (c *computeVolumeDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return computeVolumeDataSource{
-		volumeService: compute.NewVolumeService(prov.client),
-	}, diagnostics
+	c.volumeService = compute.NewVolumeService(client)
 }
 
 type computeVolumeDataSource struct {
 	volumeService compute.VolumeService
 }
 
-func (c computeVolumeDataSource) Read(ctx context.Context, request tfsdk.ReadDataSourceRequest, response *tfsdk.ReadDataSourceResponse) {
+func (c computeVolumeDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var config computeVolumeDataSourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
