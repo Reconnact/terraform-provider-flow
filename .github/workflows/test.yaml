@@ -60,7 +60,8 @@ jobs:
       fail-fast: false
       matrix:
         terraform:
-          - '1.2.*'
+          - '1.5.*'
+          - '1.15.*'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

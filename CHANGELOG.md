@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased (planned as v1.2.0)
+
+### Dependencies
+- terraform-plugin-framework v0.10.0 → v1.19.0, terraform-plugin-go v0.13.0 → v0.31.0; the test
+  stack moves from terraform-plugin-sdk/v2 to terraform-plugin-testing v1.16.0. No change in
+  behaviour: schemas, plans and state are the same, the generated docs are byte-identical.
+- The acceptance-test CI matrix runs Terraform 1.5 and 1.15 instead of 1.2.
+
 ## Unreleased (planned as v1.1.3)
 
 ### Behaviour changes
