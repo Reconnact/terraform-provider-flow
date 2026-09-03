@@ -159,6 +159,7 @@ func (p *flowProvider) Resources(ctx context.Context) []func() resource.Resource
 		newComputeSecurityGroupResource,
 		newComputeSecurityGroupRuleResource,
 		newComputeServerResource,
+		newComputeSnapshotResource,
 		newComputeVolumeResource,
 		newComputeVolumeAttachmentResource,
 

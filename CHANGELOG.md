@@ -2,6 +2,10 @@
 
 ## Unreleased (planned as v1.2.0)
 
+### New
+- `flow_compute_snapshot` resource — it was implemented but never registered, only the data source
+  was reachable. Creates a snapshot of a volume; `name` updates in place, `volume_id` replaces.
+
 ### Dependencies
 - terraform-plugin-framework v0.10.0 → v1.19.0, terraform-plugin-go v0.13.0 → v0.31.0; the test
   stack moves from terraform-plugin-sdk/v2 to terraform-plugin-testing v1.16.0. No change in
