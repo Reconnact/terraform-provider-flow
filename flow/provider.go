@@ -7,31 +7,34 @@ import (
 	"os"
 
 	"github.com/flowswiss/goclient"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-var _ tfsdk.Provider = (*provider)(nil)
+var _ provider.Provider = (*flowProvider)(nil)
 
-type Option func(p *provider)
+type Option func(p *flowProvider)
 
 func WithVersion(version string) Option {
-	return func(p *provider) {
+	return func(p *flowProvider) {
 		p.version = version
 	}
 }
 
 func WithDefaultEndpoint(endpoint string) Option {
-	return func(p *provider) {
+	return func(p *flowProvider) {
 		p.defaultEndpoint = endpoint
 	}
 }
 
-func New(opts ...Option) tfsdk.Provider {
-	p := &provider{
+func New(opts ...Option) provider.Provider {
+	p := &flowProvider{
 		version:         "dev",
 		defaultEndpoint: "https://api.flow.swiss/",
 	}
@@ -43,12 +46,9 @@ func New(opts ...Option) tfsdk.Provider {
 	return p
 }
 
-type provider struct {
+type flowProvider struct {
 	version         string
 	defaultEndpoint string
-
-	client     goclient.Client
-	configured bool
 }
 
 type providerData struct {
@@ -57,34 +57,32 @@ type providerData struct {
 	RetryTimeout types.String `tfsdk:"retry_timeout"`
 }
 
-func (p *provider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"token": {
-				Type:                types.StringType,
+func (p *flowProvider) Metadata(ctx context.Context, request provider.MetadataRequest, response *provider.MetadataResponse) {
+	response.TypeName = "flow"
+	response.Version = p.version
+}
+
+func (p *flowProvider) Schema(ctx context.Context, request provider.SchemaRequest, response *provider.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"token": schema.StringAttribute{
 				MarkdownDescription: "authentication token for the flow api",
 				Optional:            true,
 				Sensitive:           true,
 			},
-			"endpoint": {
-				Type:                types.StringType,
+			"endpoint": schema.StringAttribute{
 				MarkdownDescription: "endpoint for the flow api",
 				Optional:            true,
 			},
-			"retry_timeout": {
-				Type:                types.StringType,
+			"retry_timeout": schema.StringAttribute{
 				MarkdownDescription: "how long a failing api call is retried before the error is reported, as a duration such as `90s` or `2m` (default `90s`, `0` disables retries). can also be set with the `FLOW_RETRY_TIMEOUT` environment variable",
 				Optional:            true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (p *provider) Configure(ctx context.Context, request tfsdk.ConfigureProviderRequest, response *tfsdk.ConfigureProviderResponse) {
-	if p.configured {
-		return
-	}
-
+func (p *flowProvider) Configure(ctx context.Context, request provider.ConfigureRequest, response *provider.ConfigureResponse) {
 	var data providerData
 	diagnostics := request.Config.Get(ctx, &data)
 	response.Diagnostics.Append(diagnostics...)
@@ -92,9 +90,9 @@ func (p *provider) Configure(ctx context.Context, request tfsdk.ConfigureProvide
 		return
 	}
 
-	if data.Token.Null {
+	if data.Token.IsNull() {
 		if val, ok := os.LookupEnv("FLOW_TOKEN"); ok {
-			data.Token = types.String{Value: val}
+			data.Token = types.StringValue(val)
 		} else {
 			response.Diagnostics.AddError(
 				"Missing Token",
@@ -104,22 +102,22 @@ func (p *provider) Configure(ctx context.Context, request tfsdk.ConfigureProvide
 		}
 	}
 
-	if data.Endpoint.Null {
-		data.Endpoint = types.String{Value: p.defaultEndpoint}
+	if data.Endpoint.IsNull() {
+		data.Endpoint = types.StringValue(p.defaultEndpoint)
 
 		if val, ok := os.LookupEnv("FLOW_ENDPOINT"); ok {
-			data.Endpoint = types.String{Value: val}
+			data.Endpoint = types.StringValue(val)
 		}
 	}
 
-	if data.RetryTimeout.Null {
+	if data.RetryTimeout.IsNull() {
 		if val, ok := os.LookupEnv("FLOW_RETRY_TIMEOUT"); ok {
-			data.RetryTimeout = types.String{Value: val}
+			data.RetryTimeout = types.StringValue(val)
 		}
 	}
 
-	if !data.RetryTimeout.Null {
-		timeout, err := parseRetryTimeout(data.RetryTimeout.Value)
+	if !data.RetryTimeout.IsNull() {
+		timeout, err := parseRetryTimeout(data.RetryTimeout.ValueString())
 		if err != nil {
 			response.Diagnostics.AddAttributeError(
 				path.Root("retry_timeout"),
@@ -132,96 +130,103 @@ func (p *provider) Configure(ctx context.Context, request tfsdk.ConfigureProvide
 		defaultRetryPolicy.Timeout = timeout
 	}
 
-	p.client = goclient.NewClient(
-		goclient.WithToken(data.Token.Value),
-		goclient.WithBase(data.Endpoint.Value),
+	client := goclient.NewClient(
+		goclient.WithToken(data.Token.ValueString()),
+		goclient.WithBase(data.Endpoint.ValueString()),
 		goclient.WithUserAgent(fmt.Sprintf("terraform-provider-flow/%s", p.version)),
 
 		goclient.WithHTTPClientOption(installTransport),
 	)
 
-	p.configured = true
+	response.ResourceData = client
+	response.DataSourceData = client
 }
 
-func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceType, diag.Diagnostics) {
-	return map[string]tfsdk.ResourceType{
-		"flow_compute_certificate":                  computeCertificateResourceType{},
-		"flow_compute_elastic_ip":                   computeElasticIPResourceType{},
-		"flow_compute_elastic_ip_server_attachment": computeElasticIPServerAttachmentResourceType{},
-		"flow_compute_key_pair":                     computeKeyPairResourceType{},
-		"flow_compute_load_balancer":                computeLoadBalancerResourceType{},
-		"flow_compute_load_balancer_member":         computeLoadBalancerMemberResourceType{},
-		"flow_compute_load_balancer_pool":           computeLoadBalancerPoolResourceType{},
-		"flow_compute_network":                      computeNetworkResourceType{},
-		"flow_compute_network_interface":            computeNetworkInterfaceResourceType{},
-		"flow_compute_router":                       computeRouterResourceType{},
-		"flow_compute_router_interface":             computeRouterInterfaceResourceType{},
-		"flow_compute_router_route":                 computeRouterRouteResourceType{},
-		"flow_compute_security_group":               computeSecurityGroupResourceType{},
-		"flow_compute_security_group_rule":          computeSecurityGroupRuleResourceType{},
-		"flow_compute_server":                       computeServerResourceType{},
-		"flow_compute_volume":                       computeVolumeResourceType{},
-		"flow_compute_volume_attachment":            computeVolumeAttachmentResourceType{},
+func (p *flowProvider) Resources(ctx context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		newComputeCertificateResource,
+		newComputeElasticIPResource,
+		newComputeElasticIPServerAttachmentResource,
+		newComputeKeyPairResource,
+		newComputeLoadBalancerResource,
+		newComputeLoadBalancerMemberResource,
+		newComputeLoadBalancerPoolResource,
+		newComputeNetworkResource,
+		newComputeNetworkInterfaceResource,
+		newComputeRouterResource,
+		newComputeRouterInterfaceResource,
+		newComputeRouterRouteResource,
+		newComputeSecurityGroupResource,
+		newComputeSecurityGroupRuleResource,
+		newComputeServerResource,
+		newComputeVolumeResource,
+		newComputeVolumeAttachmentResource,
 
-		"flow_kubernetes_cluster": kubernetesClusterResourceType{},
+		newKubernetesClusterResource,
 
-		"flow_mac_bare_metal_device":                macBareMetalDeviceResourceType{},
-		"flow_mac_bare_metal_elastic_ip":            macBareMetalElasticIPResourceType{},
-		"flow_mac_bare_metal_elastic_ip_attachment": macBareMetalElasticIPDeviceAttachmentResourceType{},
-		"flow_mac_bare_metal_network":               macBareMetalNetworkResourceType{},
-		"flow_mac_bare_metal_security_group":        macBareMetalSecurityGroupResourceType{},
-		"flow_mac_bare_metal_security_group_rule":   macBareMetalSecurityGroupRuleResourceType{},
-	}, nil
+		newMacBareMetalDeviceResource,
+		newMacBareMetalElasticIPResource,
+		newMacBareMetalElasticIPDeviceAttachmentResource,
+		newMacBareMetalNetworkResource,
+		newMacBareMetalSecurityGroupResource,
+		newMacBareMetalSecurityGroupRuleResource,
+	}
 }
 
-func (p *provider) GetDataSources(ctx context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
-	return map[string]tfsdk.DataSourceType{
-		"flow_location": locationDataSourceType{},
-		"flow_module":   moduleDataSourceType{},
-		"flow_product":  productDataSourceType{},
+func (p *flowProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{
+		newLocationDataSource,
+		newModuleDataSource,
+		newProductDataSource,
 
-		"flow_compute_certificate":                     computeCertificateDataSourceType{},
-		"flow_compute_elastic_ip":                      computeElasticIPDataSourceType{},
-		"flow_compute_image":                           computeImageDataSourceType{},
-		"flow_compute_key_pair":                        computeKeyPairDataSourceType{},
-		"flow_compute_load_balancer_algorithm":         computeLoadBalancerAlgorithmDataSourceType{},
-		"flow_compute_load_balancer_health_check_type": computeLoadBalancerHealthCheckTypeDataSourceType{},
-		"flow_compute_load_balancer_member":            computeLoadBalancerMemberDataSourceType{},
-		"flow_compute_load_balancer_pool":              computeLoadBalancerPoolDataSourceType{},
-		"flow_compute_load_balancer_protocol":          computeLoadBalancerProtocolDataSourceType{},
-		"flow_compute_network":                         computeNetworkDataSourceType{},
-		"flow_compute_network_interface":               computeNetworkInterfaceDataSourceType{},
-		"flow_compute_router":                          computeRouterDataSourceType{},
-		"flow_compute_router_interface":                computeRouterInterfaceDataSourceType{},
-		"flow_compute_router_route":                    computeRouterRouteDataSourceType{},
-		"flow_compute_security_group":                  computeSecurityGroupDataSourceType{},
-		"flow_compute_security_group_rule":             computeSecurityGroupRuleDataSourceType{},
-		"flow_compute_server":                          computeServerDataSourceType{},
-		"flow_compute_snapshot":                        computeSnapshotDataSourceType{},
-		"flow_compute_volume":                          computeVolumeDataSourceType{},
+		newComputeCertificateDataSource,
+		newComputeElasticIPDataSource,
+		newComputeImageDataSource,
+		newComputeKeyPairDataSource,
+		newComputeLoadBalancerAlgorithmDataSource,
+		newComputeLoadBalancerHealthCheckTypeDataSource,
+		newComputeLoadBalancerMemberDataSource,
+		newComputeLoadBalancerPoolDataSource,
+		newComputeLoadBalancerProtocolDataSource,
+		newComputeNetworkDataSource,
+		newComputeNetworkInterfaceDataSource,
+		newComputeRouterDataSource,
+		newComputeRouterInterfaceDataSource,
+		newComputeRouterRouteDataSource,
+		newComputeSecurityGroupDataSource,
+		newComputeSecurityGroupRuleDataSource,
+		newComputeServerDataSource,
+		newComputeSnapshotDataSource,
+		newComputeVolumeDataSource,
 
-		"flow_kubernetes_cluster":     kubernetesClusterDataSourceType{},
-		"flow_kubernetes_kube_config": kubernetesKubeConfigDataSourceType{},
+		newKubernetesClusterDataSource,
+		newKubernetesKubeConfigDataSource,
 
-		"flow_mac_bare_metal_elastic_ip":          macBareMetalElasticIPDataSourceType{},
-		"flow_mac_bare_metal_network":             macBareMetalNetworkDataSourceType{},
-		"flow_mac_bare_metal_security_group":      macBareMetalSecurityGroupDataSourceType{},
-		"flow_mac_bare_metal_security_group_rule": macBareMetalSecurityGroupRuleDataSourceType{},
-	}, nil
+		newMacBareMetalElasticIPDataSource,
+		newMacBareMetalNetworkDataSource,
+		newMacBareMetalSecurityGroupDataSource,
+		newMacBareMetalSecurityGroupRuleDataSource,
+	}
 }
 
-func convertToLocalProviderType(p tfsdk.Provider) (prov *provider, diagnostics diag.Diagnostics) {
-	prov, ok := p.(*provider)
-	if !ok {
-		diagnostics.AddError(
-			"Unexpected Provider Instance Type",
-			fmt.Sprintf("While creating the data source or resource, an unexpected provider type (%T) was received. This is always a bug in the provider code and should be reported to the provider developers.", p),
-		)
-
-		return
+// the framework configures resources and data sources before the provider is
+// configured too (validate, plan without a token) — ProviderData is nil then
+// and the resource must stay unconfigured without complaint
+func clientFromProviderData(data any, diagnostics *diag.Diagnostics) (goclient.Client, bool) {
+	if data == nil {
+		return goclient.Client{}, false
 	}
 
-	return
+	client, ok := data.(goclient.Client)
+	if !ok {
+		diagnostics.AddError(
+			"Unexpected Provider Data Type",
+			fmt.Sprintf("While configuring the data source or resource, an unexpected provider data type (%T) was received. This is always a bug in the provider code and should be reported to the provider developers.", data),
+		)
+		return goclient.Client{}, false
+	}
+
+	return client, true
 }
 
 type logTransport struct {
