@@ -55,9 +55,12 @@ jobs:
     needs: build
     if: ${{ vars.RUN_ACCEPTANCE_TESTS == 'true' && needs.build.outputs.has_flow_token == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     strategy:
       fail-fast: false
+      # one matrix job at a time — both run the whole suite against the same org, and
+      # two billable creates for one org race in the api's metrics table
+      max-parallel: 1
       matrix:
         terraform:
           - '1.5.*'
@@ -73,8 +76,16 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
-      - run: go test -v -cover ./...
-        timeout-minutes: 10
+      - name: acceptance tests
+        timeout-minutes: 40
         env:
           TF_ACC: "1"
           FLOW_TOKEN: ${{ secrets.FLOW_TOKEN }}
+          # unset picks the provider default (prod); set it to point a run at another cloud
+          FLOW_ENDPOINT_OVERRIDE: ${{ vars.FLOW_ENDPOINT }}
+        run: |
+          # only export it when it has a value — an empty FLOW_ENDPOINT is taken as the endpoint
+          if [ -n "$FLOW_ENDPOINT_OVERRIDE" ]; then
+            export FLOW_ENDPOINT="$FLOW_ENDPOINT_OVERRIDE"
+          fi
+          go test -v -cover -count=1 -timeout 30m ./...

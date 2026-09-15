@@ -26,9 +26,10 @@ func testAccSequential(t *testing.T, testCase resource.TestCase) {
 	resource.Test(t, testCase)
 }
 
-// testAccServerConfig is the smallest server possible:
-// ubuntu on the smallest product in its own network, with a random key pair the. Tests append the resource they are about.
-// The cidr must differ per test — they run in parallel.
+// testAccServerConfig is the smallest server possible: ubuntu on the smallest product, in its own
+// network, with a key pair generated for the test — the api refuses a linux server without one.
+// Tests append the resource they are about, and pass a cidr of their own so leftovers of a failed
+// run cannot collide with the next.
 func testAccServerConfig(t *testing.T, name string, cidr string) string {
 	t.Helper()
 
