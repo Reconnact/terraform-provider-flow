@@ -170,7 +170,7 @@ func (c computeServerResource) Schema(ctx context.Context, request resource.Sche
 				Create:            true,
 				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait and the wait for the server to boot are bounded at 10m each"),
 				Update:            true,
-				UpdateDescription: timeoutDescription("bounds the whole update; unset, a resize gives the server 10m to stop and another 10m to come back up"),
+				UpdateDescription: timeoutDescription("bounds the whole update; unset, a resize is bounded at 10m per step — stop, the upgrade order, back to stopped, start — so up to 40m"),
 			}),
 		},
 	}

@@ -43,4 +43,4 @@ description: |-
 Optional:
 
 - `create` (String) bounds the whole create; unset, the order wait and the wait for the server to boot are bounded at 10m each; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
-- `update` (String) bounds the whole update; unset, a resize gives the server 10m to stop and another 10m to come back up; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
+- `update` (String) bounds the whole update; unset, a resize is bounded at 10m per step — stop, the upgrade order, back to stopped, start — so up to 40m; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"

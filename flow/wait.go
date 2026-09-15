@@ -35,15 +35,10 @@ const (
 	responseHeaderTimeout = 2 * time.Minute
 )
 
-// one of timeouts.Value's Create / Read / Update / Delete methods
 type timeoutGetter func(context.Context, time.Duration) (time.Duration, diag.Diagnostics)
 
 // withTimeout puts the resource's `timeouts {}` value for one operation on ctx
-// as a deadline; get is config.Timeouts.Create and friends. The configured
-// value is the budget for the whole operation — the call, the order wait and
-// the state wait share it, so `create = "5m"` means five minutes until the
-// resource is usable, not five minutes per step. An unconfigured operation
-// leaves ctx untouched and every wait inside keeps its own default.
+// as a deadline. The configured  value is the budget for the whole operation.
 func withTimeout(ctx context.Context, get timeoutGetter, diagnostics *diag.Diagnostics) (context.Context, context.CancelFunc) {
 	timeout, diags := get(ctx, 0)
 	diagnostics.Append(diags...)
