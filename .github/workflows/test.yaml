@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      has_flow_token: ${{ steps.detect_flow_token.outputs.value }}
+      acceptance_configured: ${{ steps.detect_acceptance_config.outputs.value }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -30,13 +30,18 @@ jobs:
           cache: true
       - run: go mod download
       - run: go build -v .
-      - name: detect flow token
-        id: detect_flow_token
+      # FLOW_TOKEN & FLOW_ENDPOINT have to be configured
+      - name: detect acceptance test configuration
+        id: detect_acceptance_config
+        env:
+          FLOW_TOKEN: ${{ secrets.FLOW_TOKEN }}
+          FLOW_ENDPOINT: ${{ vars.FLOW_ENDPOINT }}
         run: |
-          if [ -n "${{ secrets.FLOW_TOKEN }}" ]; then
+          if [ -n "$FLOW_TOKEN" ] && [ -n "$FLOW_ENDPOINT" ]; then
             echo "value=true" >> "$GITHUB_OUTPUT"
           else
             echo "value=false" >> "$GITHUB_OUTPUT"
+            echo "acceptance tests skipped: FLOW_TOKEN and the FLOW_ENDPOINT variable must both be set" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   generate:
@@ -57,7 +62,7 @@ jobs:
   test:
     name: terraform provider acceptance tests
     needs: build
-    if: ${{ vars.RUN_ACCEPTANCE_TESTS == 'true' && needs.build.outputs.has_flow_token == 'true' }}
+    if: ${{ needs.build.outputs.acceptance_configured == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -88,10 +93,5 @@ jobs:
         env:
           TF_ACC: "1"
           FLOW_TOKEN: ${{ secrets.FLOW_TOKEN }}
-          FLOW_ENDPOINT_OVERRIDE: ${{ vars.FLOW_ENDPOINT }}
-        run: |
-          # only export it when it has a value — an empty FLOW_ENDPOINT is taken as the endpoint
-          if [ -n "$FLOW_ENDPOINT_OVERRIDE" ]; then
-            export FLOW_ENDPOINT="$FLOW_ENDPOINT_OVERRIDE"
-          fi
-          go test -v -cover -count=1 -timeout 30m ./...
+          FLOW_ENDPOINT: ${{ vars.FLOW_ENDPOINT }}
+        run: go test -v -cover -count=1 -timeout 30m ./...
