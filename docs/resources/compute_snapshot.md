@@ -20,8 +20,19 @@ description: |-
 - `name` (String) name of the snapshot
 - `volume_id` (Number) unique identifier of the volume
 
+### Optional
+
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+
 ### Read-Only
 
 - `created_at` (String) date and time when the snapshot was created
 - `id` (Number) unique identifier of the snapshot
 - `size` (Number) size of the snapshot in GiB
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) bounds the whole create; unset, the snapshot is given 30m to become available, which scales with the volume size; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"

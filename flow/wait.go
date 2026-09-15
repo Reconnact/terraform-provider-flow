@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flowswiss/goclient/common"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -14,9 +15,8 @@ import (
 // resource is still coming up (a server keeps booting for seconds to minutes),
 // so callers poll the actual status with a deadline
 
-// TODO: these deadlines are fixed defaults — per-resource `timeouts {}`
-// overrides come with terraform-plugin-framework-timeouts once the framework
-// is on 1.x; the waits then read their deadline from the resource instead of the constant
+// default deadline per kind of wait, used when the resource carries no
+// `timeouts {}` block — a configured one replaces them, see withTimeout
 const (
 	defaultWaitInterval = 3 * time.Second
 	serverBootTimeout   = 10 * time.Minute
@@ -35,10 +35,51 @@ const (
 	responseHeaderTimeout = 2 * time.Minute
 )
 
+// one of timeouts.Value's Create / Read / Update / Delete methods
+type timeoutGetter func(context.Context, time.Duration) (time.Duration, diag.Diagnostics)
+
+// withTimeout puts the resource's `timeouts {}` value for one operation on ctx
+// as a deadline; get is config.Timeouts.Create and friends. The configured
+// value is the budget for the whole operation — the call, the order wait and
+// the state wait share it, so `create = "5m"` means five minutes until the
+// resource is usable, not five minutes per step. An unconfigured operation
+// leaves ctx untouched and every wait inside keeps its own default.
+func withTimeout(ctx context.Context, get timeoutGetter, diagnostics *diag.Diagnostics) (context.Context, context.CancelFunc) {
+	timeout, diags := get(ctx, 0)
+	diagnostics.Append(diags...)
+
+	if timeout <= 0 {
+		return ctx, func() {}
+	}
+
+	tflog.Debug(ctx, "applying configured timeout", map[string]interface{}{
+		"timeout": timeout.String(),
+	})
+	return context.WithTimeout(ctx, timeout)
+}
+
+// the generated docs give a `timeouts {}` value nothing but the duration format —
+// say what the operation waits for and what bounds it when the value is unset
+func timeoutDescription(what string) string {
+	return what + `; a string that can be ` +
+		`[parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"`
+}
+
+// remaining is how long a single wait may run: what is left of the operation's
+// configured budget, or the wait's own default when none was configured
+func remaining(ctx context.Context, fallback time.Duration) time.Duration {
+	if deadline, ok := ctx.Deadline(); ok {
+		return time.Until(deadline)
+	}
+	return fallback
+}
+
 // the sdk polls an order until it succeeds, fails or the context ends — this
 // bounds it and names the order in the error
 func waitForOrder(ctx context.Context, service common.OrderService, ordering common.Ordering) (common.Order, error) {
-	ctx, cancel := context.WithTimeout(ctx, orderTimeout)
+	start := time.Now()
+
+	ctx, cancel := context.WithTimeout(ctx, remaining(ctx, orderTimeout))
 	defer cancel()
 
 	order, err := service.WaitUntilProcessed(ctx, ordering)
@@ -49,7 +90,7 @@ func waitForOrder(ctx context.Context, service common.OrderService, ordering com
 	id, _ := ordering.ExtractIdentifier()
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return order, fmt.Errorf("timeout after %s waiting for order %d to be processed", orderTimeout, id)
+		return order, fmt.Errorf("timeout after %s waiting for order %d to be processed", time.Since(start).Round(time.Second), id)
 	case errors.Is(err, common.ErrOrderFailed):
 		if order.Status.Name != "" {
 			return order, fmt.Errorf("order %d failed (%s)", id, order.Status.Name)
@@ -63,7 +104,8 @@ func waitForOrder(ctx context.Context, service common.OrderService, ordering com
 // context is cancelled — an error from check does not abort the wait, it only
 // surfaces in the timeout error if it never went away
 func waitFor(ctx context.Context, timeout, interval time.Duration, name string, check func(ctx context.Context) (bool, error)) error {
-	deadline := time.Now().Add(timeout)
+	start := time.Now()
+	deadline := start.Add(remaining(ctx, timeout))
 	var lastErr error
 
 	for attempt := 1; ; attempt++ {
@@ -76,10 +118,11 @@ func waitFor(ctx context.Context, timeout, interval time.Duration, name string, 
 		}
 
 		if time.Now().Add(interval).After(deadline) {
+			waited := time.Since(start).Round(time.Second)
 			if lastErr != nil {
-				return fmt.Errorf("timeout after %s waiting for %s (last error: %w)", timeout, name, lastErr)
+				return fmt.Errorf("timeout after %s waiting for %s (last error: %w)", waited, name, lastErr)
 			}
-			return fmt.Errorf("timeout after %s waiting for %s", timeout, name)
+			return fmt.Errorf("timeout after %s waiting for %s", waited, name)
 		}
 
 		tflog.Debug(ctx, "waiting", map[string]interface{}{

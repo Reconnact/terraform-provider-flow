@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flowswiss/goclient/compute"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -29,6 +30,8 @@ type computeVolumeResourceData struct {
 	Size         types.Int64  `tfsdk:"size"`
 	Location     types.Int64  `tfsdk:"location_id"`
 	Snapshot     types.Int64  `tfsdk:"restore_from_snapshot_id"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (d *computeVolumeResourceData) FromEntity(volume compute.Volume) {
@@ -86,6 +89,14 @@ func (t computeVolumeResource) Schema(ctx context.Context, request resource.Sche
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the volume is given 30m to settle, which a restore from a snapshot needs"),
+				Update:            true,
+				UpdateDescription: timeoutDescription("bounds the whole update; unset, an expand gives the volume 5m to settle"),
+			}),
+		},
 	}
 }
 
@@ -117,6 +128,9 @@ func (r computeVolumeResource) Create(ctx context.Context, request resource.Crea
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
 
 	create := compute.VolumeCreate{
 		Name:       config.Name.ValueString(),
@@ -154,6 +168,7 @@ func (r computeVolumeResource) Create(ctx context.Context, request resource.Crea
 	// copy the restored snapshot property from the config. in the api we don't know anymore if there was a snapshot
 	// that has been restored.
 	state.Snapshot = config.Snapshot
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -197,6 +212,9 @@ func (r computeVolumeResource) Update(ctx context.Context, request resource.Upda
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, plan.Timeouts.Update, &response.Diagnostics)
+	defer cancel()
 
 	volume, err := r.volumeService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
@@ -253,6 +271,7 @@ func (r computeVolumeResource) Update(ctx context.Context, request resource.Upda
 	}
 
 	state.FromEntity(volume)
+	state.Timeouts = plan.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)

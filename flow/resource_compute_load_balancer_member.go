@@ -7,6 +7,7 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -34,6 +35,8 @@ type computeLoadBalancerMemberResourceData struct {
 	Port    types.Int64  `tfsdk:"port"`
 
 	// TODO status
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (c *computeLoadBalancerMemberResourceData) FromEntity(loadBalancerID, poolID int, member compute.LoadBalancerMember) {
@@ -98,6 +101,14 @@ func (c computeLoadBalancerMemberResource) Schema(ctx context.Context, request r
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the load balancer is given 10m to become mutable again"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the load balancer is given 10m to become mutable again"),
+			}),
+		},
 	}
 }
 
@@ -130,6 +141,9 @@ func (c computeLoadBalancerMemberResource) Create(ctx context.Context, request r
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
+
 	loadBalancerID := int(config.LoadBalancerID.ValueInt64())
 	poolID := int(config.PoolID.ValueInt64())
 
@@ -151,6 +165,7 @@ func (c computeLoadBalancerMemberResource) Create(ctx context.Context, request r
 
 	var state computeLoadBalancerMemberResourceData
 	state.FromEntity(loadBalancerID, poolID, member)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -209,6 +224,9 @@ func (c computeLoadBalancerMemberResource) Delete(ctx context.Context, request r
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
 
 	loadBalancerID := int(state.LoadBalancerID.ValueInt64())
 	poolID := int(state.PoolID.ValueInt64())

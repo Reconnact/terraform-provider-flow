@@ -6,6 +6,7 @@ import (
 
 	"github.com/flowswiss/goclient/compute"
 	"github.com/flowswiss/goclient/kubernetes"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/datasource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -19,6 +20,8 @@ var (
 type kubernetesKubeConfigDataSourceData struct {
 	ClusterID  types.Int64  `tfsdk:"cluster_id"`
 	KubeConfig types.String `tfsdk:"kube_config"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (k *kubernetesKubeConfigDataSourceData) FromEntity(clusterID int, kubeConfig kubernetes.ClusterKubeConfig) {
@@ -38,6 +41,11 @@ func (k kubernetesKubeConfigDataSource) Schema(ctx context.Context, request data
 				Computed:            true,
 				Sensitive:           true,
 			},
+		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.BlockWithOpts(ctx, timeouts.Opts{
+				ReadDescription: timeoutDescription("bounds the whole read; unset, the cluster is given 20m to become ready"),
+			}),
 		},
 	}
 }
@@ -71,6 +79,9 @@ func (k kubernetesKubeConfigDataSource) Read(ctx context.Context, request dataso
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Read, &response.Diagnostics)
+	defer cancel()
+
 	clusterID := int(config.ClusterID.ValueInt64())
 
 	// the kube-config is refused  until the cluster is healthy and unlocked — the plain get first so a wrong id fails at once
@@ -94,6 +105,7 @@ func (k kubernetesKubeConfigDataSource) Read(ctx context.Context, request dataso
 
 	var state kubernetesKubeConfigDataSourceData
 	state.FromEntity(int(config.ClusterID.ValueInt64()), kubeConfig)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)

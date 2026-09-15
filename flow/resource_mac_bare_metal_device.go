@@ -6,6 +6,7 @@ import (
 
 	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -29,6 +30,8 @@ type macBareMetalDeviceResourceData struct {
 	NetworkID          types.Int64  `tfsdk:"network_id"`
 	NetworkInterfaceID types.Int64  `tfsdk:"network_interface_id"`
 	Password           types.String `tfsdk:"password"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (m *macBareMetalDeviceResourceData) FromEntity(device macbaremetal.Device) {
@@ -95,6 +98,12 @@ func (m macBareMetalDeviceResource) Schema(ctx context.Context, request resource
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait is bounded at 10m"),
+			}),
+		},
 	}
 }
 
@@ -129,6 +138,9 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
+
 	create := macbaremetal.DeviceCreate{
 		Name:            config.Name.ValueString(),
 		LocationID:      int(config.LocationID.ValueInt64()),
@@ -160,6 +172,7 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource
 	state.FromEntity(device)
 
 	state.Password = config.Password
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -211,6 +224,7 @@ func (m macBareMetalDeviceResource) Update(ctx context.Context, request resource
 	}
 
 	state.FromEntity(device)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)

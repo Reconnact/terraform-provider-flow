@@ -5,12 +5,20 @@
 ### New
 - `flow_compute_snapshot` resource — it was implemented but never registered, only the data source
   was reachable. Creates a snapshot of a volume; `name` updates in place, `volume_id` replaces.
+- Every resource that waits for the backend to catch up now takes a `timeouts {}` block, with only the
+  operations that actually wait on offer. A `create = "45m"` means forty-five minutes until the resource is
+  usable, not forty-five per step. Left out, each wait keeps the deadline it had before, and the
+  generated docs name that default per operation.
+- A `flow_compute_volume_attachment` whose `timeouts` block is the only change no longer detaches
+  and re-attaches the volume.
 
 ### Dependencies
 - terraform-plugin-framework v0.10.0 → v1.19.0, terraform-plugin-go v0.13.0 → v0.31.0; the test
   stack moves from terraform-plugin-sdk/v2 to terraform-plugin-testing v1.16.0. No change in
   behaviour: schemas, plans and state are the same, the generated docs are byte-identical.
 - The acceptance-test CI matrix runs Terraform 1.5 and 1.15 instead of 1.2.
+- New: terraform-plugin-framework-timeouts v0.7.0, which provides the `timeouts {}` schema and its
+  duration validator.
 
 ## Unreleased (planned as v1.1.3)
 

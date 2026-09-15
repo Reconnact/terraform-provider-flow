@@ -7,6 +7,7 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -23,6 +24,8 @@ var _ resource.ResourceWithImportState = (*computeVolumeAttachmentResource)(nil)
 type computeVolumeAttachmentResourceData struct {
 	VolumeID types.Int64 `tfsdk:"volume_id"`
 	ServerID types.Int64 `tfsdk:"server_id"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (d *computeVolumeAttachmentResourceData) FromEntity(volume compute.Volume) {
@@ -44,6 +47,16 @@ func (t computeVolumeAttachmentResource) Schema(ctx context.Context, request res
 				MarkdownDescription: "identifier of the server for the attachment — changing it moves the volume to the other server",
 				Required:            true,
 			},
+		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole attach; unset, the volume is given 5m to reach in use"),
+				Update:            true,
+				UpdateDescription: timeoutDescription("bounds detach and re-attach together; unset, each is given 5m"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole detach; unset, the volume is given 5m to become available"),
+			}),
 		},
 	}
 }
@@ -77,6 +90,9 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request res
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
+
 	service := compute.NewVolumeService(r.client)
 
 	volume, err := service.Get(ctx, int(config.VolumeID.ValueInt64()))
@@ -89,6 +105,7 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request res
 	if volume.AttachedTo.ID == int(config.ServerID.ValueInt64()) {
 		var state computeVolumeAttachmentResourceData
 		state.FromEntity(volume)
+		state.Timeouts = config.Timeouts
 
 		diagnostics = response.State.Set(ctx, state)
 		response.Diagnostics.Append(diagnostics...)
@@ -125,6 +142,7 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request res
 
 	var state computeVolumeAttachmentResourceData
 	state.FromEntity(volume)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -174,6 +192,19 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request res
 		return
 	}
 
+	// the timeouts block is the only other thing an update can carry — moving
+	// the volume for it would detach a live disk for nothing
+	if plan.ServerID.Equal(state.ServerID) {
+		state.Timeouts = plan.Timeouts
+
+		diagnostics = response.State.Set(ctx, state)
+		response.Diagnostics.Append(diagnostics...)
+		return
+	}
+
+	ctx, cancel := withTimeout(ctx, plan.Timeouts.Update, &response.Diagnostics)
+	defer cancel()
+
 	// detach the volume from the current server
 	err := retryDelete(ctx, "detach volume", func() error {
 		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.ValueInt64()), int(state.ServerID.ValueInt64()))
@@ -214,6 +245,7 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request res
 	tflog.Trace(ctx, "volume attachment: volume attached to new server")
 
 	state.FromEntity(volume)
+	state.Timeouts = plan.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -226,6 +258,9 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request res
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
 
 	err := retryDelete(ctx, "detach volume", func() error {
 		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.ValueInt64()), int(state.ServerID.ValueInt64()))

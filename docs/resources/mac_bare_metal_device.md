@@ -23,7 +23,18 @@ description: |-
 - `password` (String, Sensitive) password of the device
 - `product_id` (Number) unique identifier of the product
 
+### Optional
+
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+
 ### Read-Only
 
 - `id` (Number) unique identifier of the device
 - `network_interface_id` (Number) unique identifier of the network interface
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) bounds the whole create; unset, the order wait is bounded at 10m; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"

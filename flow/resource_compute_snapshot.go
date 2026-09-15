@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flowswiss/goclient/compute"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -27,6 +28,8 @@ type computeSnapshotResourceData struct {
 
 	Name     types.String `tfsdk:"name"`
 	VolumeID types.Int64  `tfsdk:"volume_id"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (d *computeSnapshotResourceData) FromEntity(snapshot compute.Snapshot) {
@@ -69,6 +72,12 @@ func (t computeSnapshotResource) Schema(ctx context.Context, request resource.Sc
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the snapshot is given 30m to become available, which scales with the volume size"),
+			}),
+		},
 	}
 }
 
@@ -101,6 +110,9 @@ func (r computeSnapshotResource) Create(ctx context.Context, request resource.Cr
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
+
 	create := compute.SnapshotCreate{
 		Name:     config.Name.ValueString(),
 		VolumeID: int(config.VolumeID.ValueInt64()),
@@ -131,6 +143,7 @@ func (r computeSnapshotResource) Create(ctx context.Context, request resource.Cr
 
 	var state computeSnapshotResourceData
 	state.FromEntity(snapshot)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -200,6 +213,7 @@ func (r computeSnapshotResource) Update(ctx context.Context, request resource.Up
 	}
 
 	state.FromEntity(snapshot)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flowswiss/goclient/compute"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -56,6 +57,8 @@ type computeLoadBalancerPoolResourceData struct {
 	CertificateID types.Int64 `tfsdk:"certificate_id"`
 
 	HealthCheck *computeLoadBalancerHealthCheckResourceData `tfsdk:"health_check"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (c *computeLoadBalancerPoolResourceData) FromEntity(loadBalancerID int, pool compute.LoadBalancerPool) {
@@ -219,6 +222,16 @@ func (c computeLoadBalancerPoolResource) Schema(ctx context.Context, request res
 				Required: true,
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the load balancer is given 10m to become mutable again"),
+				Update:            true,
+				UpdateDescription: timeoutDescription("bounds the whole update; unset, the load balancer is given 10m to become mutable again"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the load balancer is given 10m to become mutable again"),
+			}),
+		},
 	}
 }
 
@@ -251,6 +264,9 @@ func (c computeLoadBalancerPoolResource) Create(ctx context.Context, request res
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
+
 	healthCheck, diagnostics := convertHealthCheckConfigToAPIOptions(*config.HealthCheck)
 	response.Diagnostics.Append(diagnostics...)
 	if response.Diagnostics.HasError() {
@@ -281,6 +297,7 @@ func (c computeLoadBalancerPoolResource) Create(ctx context.Context, request res
 
 	var state computeLoadBalancerPoolResourceData
 	state.FromEntity(loadBalancerID, pool)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -332,6 +349,9 @@ func (c computeLoadBalancerPoolResource) Update(ctx context.Context, request res
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Update, &response.Diagnostics)
+	defer cancel()
+
 	healthCheck, diagnostics := convertHealthCheckConfigToAPIOptions(*config.HealthCheck)
 	response.Diagnostics.Append(diagnostics...)
 	if response.Diagnostics.HasError() {
@@ -365,6 +385,7 @@ func (c computeLoadBalancerPoolResource) Update(ctx context.Context, request res
 	}
 
 	state.FromEntity(loadBalancerID, pool)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -377,6 +398,9 @@ func (c computeLoadBalancerPoolResource) Delete(ctx context.Context, request res
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
 
 	loadBalancerID := int(state.LoadBalancerID.ValueInt64())
 	poolID := int(state.ID.ValueInt64())

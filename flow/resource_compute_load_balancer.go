@@ -6,6 +6,7 @@ import (
 
 	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/compute"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -27,6 +28,8 @@ type computeLoadBalancerResourceData struct {
 	LocationID types.Int64  `tfsdk:"location_id"`
 	NetworkID  types.Int64  `tfsdk:"network_id"`
 	PrivateIP  types.String `tfsdk:"private_ip"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (c *computeLoadBalancerResourceData) FromEntity(loadBalancer compute.LoadBalancer) {
@@ -81,6 +84,12 @@ func (c computeLoadBalancerResource) Schema(ctx context.Context, request resourc
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait and the wait for the load balancer to become mutable are bounded at 10m each"),
+			}),
+		},
 	}
 }
 
@@ -113,6 +122,9 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request resourc
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
 
 	create := compute.LoadBalancerCreate{
 		Name:             config.Name.ValueString(),
@@ -148,6 +160,7 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request resourc
 
 	var state computeLoadBalancerResourceData
 	state.FromEntity(loadBalancer)
+	state.Timeouts = config.Timeouts
 
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }
@@ -202,6 +215,7 @@ func (c computeLoadBalancerResource) Update(ctx context.Context, request resourc
 	}
 
 	state.FromEntity(loadBalancer)
+	state.Timeouts = config.Timeouts
 
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
 }

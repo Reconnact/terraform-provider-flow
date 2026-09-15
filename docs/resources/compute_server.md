@@ -30,8 +30,17 @@ description: |-
 - `password` (String, Sensitive) initial windows password of the server
 - `private_ip` (String) initial private ip of the server
 - `security_group_ids` (Set of Number) security groups on the primary network interface — the organisation's default group when omitted; at least one is required
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
 - `id` (Number) unique identifier of the server
 - `network_interface_id` (Number) unique identifier of the server's primary network interface — reference it from elastic ip attachments
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) bounds the whole create; unset, the order wait and the wait for the server to boot are bounded at 10m each; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
+- `update` (String) bounds the whole update; unset, a resize gives the server 10m to stop and another 10m to come back up; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"

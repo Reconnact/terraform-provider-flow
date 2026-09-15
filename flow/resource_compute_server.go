@@ -7,6 +7,7 @@ import (
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/compute"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -38,6 +39,8 @@ type computeServerResourceData struct {
 
 	NetworkInterfaceID types.Int64 `tfsdk:"network_interface_id"`
 	SecurityGroupIDs   types.Set   `tfsdk:"security_group_ids"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (c *computeServerResourceData) FromEntity(server compute.Server) {
@@ -162,6 +165,14 @@ func (c computeServerResource) Schema(ctx context.Context, request resource.Sche
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait and the wait for the server to boot are bounded at 10m each"),
+				Update:            true,
+				UpdateDescription: timeoutDescription("bounds the whole update; unset, a resize gives the server 10m to stop and another 10m to come back up"),
+			}),
+		},
 	}
 }
 
@@ -194,6 +205,9 @@ func (c computeServerResource) Create(ctx context.Context, request resource.Crea
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
 
 	create := compute.ServerCreate{
 		Name:             config.Name.ValueString(),
@@ -241,6 +255,7 @@ func (c computeServerResource) Create(ctx context.Context, request resource.Crea
 
 	state.Password = config.Password
 	state.CloudInit = config.CloudInit
+	state.Timeouts = config.Timeouts
 
 	response.Diagnostics.Append(c.readSecurityGroups(ctx, server, &state)...)
 	response.Diagnostics.Append(response.State.Set(ctx, state)...)
@@ -286,6 +301,9 @@ func (c computeServerResource) Update(ctx context.Context, request resource.Upda
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, plan.Timeouts.Update, &response.Diagnostics)
+	defer cancel()
+
 	update := compute.ServerUpdate{
 		Name: plan.Name.ValueString(),
 	}
@@ -317,6 +335,7 @@ func (c computeServerResource) Update(ctx context.Context, request resource.Upda
 	}
 
 	state.FromEntity(server)
+	state.Timeouts = plan.Timeouts
 
 	response.Diagnostics.Append(c.readSecurityGroups(ctx, server, &state)...)
 	if response.Diagnostics.HasError() {

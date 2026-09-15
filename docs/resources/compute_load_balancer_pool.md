@@ -28,6 +28,7 @@ Import: `terraform import flow_compute_load_balancer_pool.<name> <load_balancer_
 
 - `certificate_id` (Number) unique identifier of the certificate
 - `sticky_session` (Boolean) whether the load balancer pool is sticky
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
@@ -56,3 +57,14 @@ Required:
 
 - `method` (String) HTTP method of the health check
 - `path` (String) path of the health check
+
+
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) bounds the whole create; unset, the load balancer is given 10m to become mutable again; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
+- `delete` (String) bounds the whole delete; unset, the load balancer is given 10m to become mutable again; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
+- `update` (String) bounds the whole update; unset, the load balancer is given 10m to become mutable again; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"

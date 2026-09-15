@@ -8,6 +8,7 @@ import (
 	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/compute"
 	"github.com/flowswiss/goclient/kubernetes"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -40,6 +41,8 @@ type kubernetesClusterResourceData struct {
 
 	NodeCount     types.Int64 `tfsdk:"node_count"`
 	NodeProductID types.Int64 `tfsdk:"node_product_id"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (k *kubernetesClusterResourceData) FromEntity(cluster kubernetes.Cluster) {
@@ -149,6 +152,16 @@ func (k kubernetesClusterResource) Schema(ctx context.Context, request resource.
 				Required:            true,
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait is bounded at 10m and the cluster is given 20m to become ready"),
+				Update:            true,
+				UpdateDescription: timeoutDescription("bounds the whole update; unset, the cluster is given 20m to unlock after each change"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the cluster is given 20m to disappear"),
+			}),
+		},
 	}
 }
 
@@ -182,6 +195,9 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request resource.
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
 
 	create := kubernetes.ClusterCreate{
 		Name:       config.Name.ValueString(),
@@ -225,6 +241,7 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request resource.
 	// set state of the resource
 	var state kubernetesClusterResourceData
 	state.FromEntity(cluster)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -268,6 +285,9 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request resource.
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, plan.Timeouts.Update, &response.Diagnostics)
+	defer cancel()
 
 	if plan.Name.ValueString() != state.Name.ValueString() {
 		// no unlock wait here — the name update is not guarded by the action , unlike configuration and flavor
@@ -341,6 +361,7 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request resource.
 	}
 
 	state.FromEntity(cluster)
+	state.Timeouts = plan.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -353,6 +374,9 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request resource.
 	if response.Diagnostics.HasError() {
 		return
 	}
+
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
 
 	err := retryDelete(ctx, "delete cluster", func() error {
 		return k.clusterService.Delete(ctx, int(state.ID.ValueInt64()))
