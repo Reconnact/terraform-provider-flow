@@ -2,6 +2,10 @@
 
 This repository contains the Terraform provider implementation for the [Flow Swiss](https://flow.swiss/) cloud platform.
 
+## Requirements
+
+Terraform 1.11 or later.
+
 ## Developing
 
 In order to develop the provider, you need to tell Terraform to use the locally built provider instead of fetching it

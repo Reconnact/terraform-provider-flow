@@ -131,19 +131,15 @@ func (c computeCertificateResource) Schema(ctx context.Context, request resource
 				},
 			},
 			"certificate": schema.StringAttribute{
-				MarkdownDescription: "certificate in base64 encoded PEM format",
+				MarkdownDescription: "certificate in base64 encoded PEM format; editing it produces no plan, rotate with `terraform apply -replace=`",
 				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				WriteOnly:           true,
 			},
 			"private_key": schema.StringAttribute{
-				MarkdownDescription: "private key in base64 encoded PEM format",
+				MarkdownDescription: "private key in base64 encoded PEM format; editing it produces no plan, rotate with `terraform apply -replace=`",
 				Required:            true,
 				Sensitive:           true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				WriteOnly:           true,
 			},
 			"info": schema.SingleNestedAttribute{
 				Attributes: map[string]schema.Attribute{
@@ -225,10 +221,6 @@ func (c computeCertificateResource) Create(ctx context.Context, request resource
 
 	var state computeCertificateResourceData
 	state.FromEntity(certificate)
-
-	// copy the certificate and private key from the config because the api does not return it
-	state.Certificate = config.Certificate
-	state.PrivateKey = config.PrivateKey
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)

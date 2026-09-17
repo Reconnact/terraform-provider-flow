@@ -15,6 +15,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
 func TestAccComputeCertificate_Basic(t *testing.T) {
@@ -32,6 +33,9 @@ func TestAccComputeCertificate_Basic(t *testing.T) {
 
 	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+			tfversion.SkipBelow(tfversion.Version1_11_0),
+		},
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(testAccComputeCertificateConfigBasic, certificateName, certBase64, privBase64),
@@ -39,12 +43,22 @@ func TestAccComputeCertificate_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("flow_compute_certificate.foobar", "id"),
 					resource.TestCheckResourceAttr("flow_compute_certificate.foobar", "name", certificateName),
 					resource.TestCheckResourceAttr("flow_compute_certificate.foobar", "location_id", "1"),
-					resource.TestCheckResourceAttr("flow_compute_certificate.foobar", "certificate", certBase64),
-					resource.TestCheckResourceAttr("flow_compute_certificate.foobar", "private_key", privBase64),
+					resource.TestCheckNoResourceAttr("flow_compute_certificate.foobar", "certificate"),
+					resource.TestCheckNoResourceAttr("flow_compute_certificate.foobar", "private_key"),
 					resource.TestCheckResourceAttrSet("flow_compute_certificate.foobar", "info.not_before"),
 					resource.TestCheckResourceAttrSet("flow_compute_certificate.foobar", "info.not_after"),
 					resource.TestCheckResourceAttrSet("flow_compute_certificate.foobar", "info.serial_number"),
 				),
+			},
+			{
+				ResourceName:      "flow_compute_certificate.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				ResourceName:    "flow_compute_certificate.foobar",
+				ImportState:     true,
+				ImportStateKind: resource.ImportBlockWithID,
 			},
 		},
 	})

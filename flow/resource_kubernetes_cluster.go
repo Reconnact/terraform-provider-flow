@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/compute"
@@ -328,6 +329,14 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request resource.
 			return err
 		})
 		if err != nil {
+			if isVariableSchemaMismatch(err) {
+				response.Diagnostics.AddAttributeError(
+					path.Root("version_id"),
+					"Cluster Variables Rejected By The Target Version",
+					fmt.Sprintf("the cluster's configuration variables do not fit the schema of kubernetes version %d: %s. terraform does not manage these variables, so adjust them in the portal or run the upgrade there, then apply again", plan.VersionID.ValueInt64(), err),
+				)
+				return
+			}
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to change cluster configuration: %s", err))
 			return
 		}
@@ -392,6 +401,10 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request resource.
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster deletion: %s", err))
 		return
 	}
+}
+
+func isVariableSchemaMismatch(err error) bool {
+	return statusCode(err) == http.StatusBadRequest && strings.Contains(err.Error(), "invalid property at")
 }
 
 // the create order succeeds while the cluster is still provisioning — until it

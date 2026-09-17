@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -90,12 +89,10 @@ func (m macBareMetalDeviceResource) Schema(ctx context.Context, request resource
 				},
 			},
 			"password": schema.StringAttribute{
-				MarkdownDescription: "password of the device",
+				MarkdownDescription: "password of the device; editing it produces no plan, rotate with `terraform apply -replace=`",
 				Required:            true,
 				Sensitive:           true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				WriteOnly:           true,
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -176,7 +173,6 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource
 	var state macBareMetalDeviceResourceData
 	state.FromEntity(device)
 
-	state.Password = config.Password
 	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)

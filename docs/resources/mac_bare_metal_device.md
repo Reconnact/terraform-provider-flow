@@ -17,10 +17,12 @@ description: |-
 
 ### Required
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `location_id` (Number) unique identifier of the location
 - `name` (String) name of the device
 - `network_id` (Number) unique identifier of the network
-- `password` (String, Sensitive) password of the device
+- `password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) password of the device; editing it produces no plan, rotate with `terraform apply -replace=`
 - `product_id` (Number) unique identifier of the product
 
 ### Optional

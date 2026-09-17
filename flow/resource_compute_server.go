@@ -150,19 +150,15 @@ func (c computeServerResource) Schema(ctx context.Context, request resource.Sche
 				},
 			},
 			"password": schema.StringAttribute{
-				MarkdownDescription: "initial windows password of the server",
+				MarkdownDescription: "initial windows password of the server; editing it produces no plan, rotate with `terraform apply -replace=`",
 				Optional:            true,
 				Sensitive:           true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				WriteOnly:           true,
 			},
 			"cloud_init": schema.StringAttribute{
-				MarkdownDescription: "cloud init script",
+				MarkdownDescription: "cloud init script; editing it produces no plan, rotate with `terraform apply -replace=`",
 				Optional:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				WriteOnly:           true,
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -206,6 +202,15 @@ func (c computeServerResource) Create(ctx context.Context, request resource.Crea
 		return
 	}
 
+	// write-only values only ever arrive in the config — the framework nulls them
+	// in the plan, which is where every other attribute here comes from
+	var password, cloudInit types.String
+	response.Diagnostics.Append(request.Config.GetAttribute(ctx, path.Root("password"), &password)...)
+	response.Diagnostics.Append(request.Config.GetAttribute(ctx, path.Root("cloud_init"), &cloudInit)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+
 	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
 	defer cancel()
 
@@ -218,8 +223,8 @@ func (c computeServerResource) Create(ctx context.Context, request resource.Crea
 		NetworkID:        int(config.NetworkID.ValueInt64()),
 		PrivateIP:        config.PrivateIP.ValueString(),
 		KeyPairID:        int(config.KeyPairID.ValueInt64()),
-		Password:         config.Password.ValueString(),
-		CloudInit:        config.CloudInit.ValueString(),
+		Password:         password.ValueString(),
+		CloudInit:        cloudInit.ValueString(),
 	}
 
 	var ordering common.Ordering
@@ -254,8 +259,6 @@ func (c computeServerResource) Create(ctx context.Context, request resource.Crea
 	var state computeServerResourceData
 	state.FromEntity(server)
 
-	state.Password = config.Password
-	state.CloudInit = config.CloudInit
 	state.Timeouts = config.Timeouts
 
 	response.Diagnostics.Append(c.readSecurityGroups(ctx, server, &state)...)
