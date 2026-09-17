@@ -131,15 +131,6 @@ func (c computeCertificateDataSource) Schema(ctx context.Context, request dataso
 				MarkdownDescription: "unique identifier of the location",
 				Required:            true,
 			},
-			"certificate": schema.StringAttribute{
-				MarkdownDescription: "certificate in base64 encoded PEM format",
-				Required:            true,
-			},
-			"private_key": schema.StringAttribute{
-				MarkdownDescription: "private key in base64 encoded PEM format",
-				Required:            true,
-				Sensitive:           true,
-			},
 			"info": schema.SingleNestedAttribute{
 				Attributes: map[string]schema.Attribute{
 					"subject": schema.SingleNestedAttribute{
