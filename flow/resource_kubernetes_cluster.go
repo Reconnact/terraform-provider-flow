@@ -233,8 +233,9 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request resource.
 	cluster, err := waitForClusterReady(ctx, k.clusterService, order.Product.ID)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be ready: %s", err))
+		// the order went through, so the cluster exists and is billed — keep its id
 		if cluster.ID == 0 {
-			return
+			cluster.ID = order.Product.ID
 		}
 	}
 

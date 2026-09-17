@@ -164,8 +164,9 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource
 
 	device, err := m.deviceService.Get(ctx, order.Product.ID)
 	if err != nil {
+		// the order went through, so the device exists and is billed — keep its id
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get device: %s", err))
-		return
+		device = macbaremetal.Device{ID: order.Product.ID}
 	}
 
 	var state macBareMetalDeviceResourceData

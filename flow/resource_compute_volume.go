@@ -263,10 +263,13 @@ func (r computeVolumeResource) Update(ctx context.Context, request resource.Upda
 			return
 		}
 
-		volume, err = r.waitForVolumeSettled(ctx, int(state.ID.ValueInt64()), volumeSettleTimeout)
-		if err != nil {
-			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume to settle: %s", err))
-			return
+		// the expand went through, so its response is kept when the wait fails
+		settled, waitErr := r.waitForVolumeSettled(ctx, int(state.ID.ValueInt64()), volumeSettleTimeout)
+		if settled.ID != 0 {
+			volume = settled
+		}
+		if waitErr != nil {
+			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume to settle: %s", waitErr))
 		}
 	}
 

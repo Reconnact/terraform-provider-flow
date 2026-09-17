@@ -119,12 +119,20 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Create(ctx context.Contex
 
 	device, err := macbaremetal.NewDeviceService(c.client).Get(ctx, serverID)
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get device: %s", err))
+		response.Diagnostics.AddWarning(
+			"Incomplete Read",
+			fmt.Sprintf("the elastic ip was attached but device %d could not be read back: %s", serverID, err),
+		)
+		diagnostics = response.State.Set(ctx, config)
+		response.Diagnostics.Append(diagnostics...)
 		return
 	}
 
 	var state macBareMetalElasticIPDeviceAttachmentResourceData
 	state.FromEntity(device, elasticIP)
+
+	// the api does not report the ip on the interface right after the attach
+	state.NetworkInterfaceID = config.NetworkInterfaceID
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)

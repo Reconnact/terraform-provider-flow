@@ -236,10 +236,12 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request res
 		return
 	}
 
-	volume, err = r.waitForVolumeStatus(ctx, "in use", int(state.VolumeID.ValueInt64()), compute.VolumeStatusInUse)
-	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume attachment: %s", err))
-		return
+	attached, waitErr := r.waitForVolumeStatus(ctx, "in use", int(state.VolumeID.ValueInt64()), compute.VolumeStatusInUse)
+	if attached.ID != 0 {
+		volume = attached
+	}
+	if waitErr != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume attachment: %s", waitErr))
 	}
 
 	tflog.Trace(ctx, "volume attachment: volume attached to new server")

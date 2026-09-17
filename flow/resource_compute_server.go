@@ -241,8 +241,9 @@ func (c computeServerResource) Create(ctx context.Context, request resource.Crea
 	server, err := c.waitForServerStatus(ctx, order.Product.ID, compute.ServerStatusRunning, "running")
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for server to be running: %s", err))
+		// the order went through, so the server exists and is billed — keep its id
 		if server.ID == 0 {
-			return
+			server.ID = order.Product.ID
 		}
 	} else if !config.SecurityGroupIDs.IsNull() && !config.SecurityGroupIDs.IsUnknown() {
 		if err := c.updateSecurityGroups(ctx, server, config.SecurityGroupIDs); err != nil {

@@ -120,14 +120,22 @@ func (c computeElasticIPServerAttachmentResource) Create(ctx context.Context, re
 		return
 	}
 
-	server, err := compute.NewServerService(c.client).Get(ctx, serverID)
+	server, err := c.serverService.Get(ctx, serverID)
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get server: %s", err))
+		response.Diagnostics.AddWarning(
+			"Incomplete Read",
+			fmt.Sprintf("the elastic ip was attached but server %d could not be read back: %s", serverID, err),
+		)
+		diagnostics = response.State.Set(ctx, config)
+		response.Diagnostics.Append(diagnostics...)
 		return
 	}
 
 	var state computeElasticIPServerAttachmentResourceData
 	state.FromEntity(server, elasticIP)
+
+	// the api does not report the ip on the interface right after the attach
+	state.NetworkInterfaceID = config.NetworkInterfaceID
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -141,7 +149,7 @@ func (c computeElasticIPServerAttachmentResource) Read(ctx context.Context, requ
 		return
 	}
 
-	server, err := compute.NewServerService(c.client).Get(ctx, int(state.ServerID.ValueInt64()))
+	server, err := c.serverService.Get(ctx, int(state.ServerID.ValueInt64()))
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("server %d", state.ServerID.ValueInt64()))
