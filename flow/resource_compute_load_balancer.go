@@ -246,6 +246,9 @@ func waitForLoadBalancerMutable(ctx context.Context, service compute.LoadBalance
 	err = waitFor(ctx, loadBalancerTimeout, defaultWaitInterval, fmt.Sprintf("load balancer %d to be mutable", loadBalancerID), func(ctx context.Context) (bool, error) {
 		got, err := service.Get(ctx, loadBalancerID)
 		if err != nil {
+			if isNotFound(err) {
+				return false, stopWaiting(err)
+			}
 			return false, err
 		}
 		loadBalancer = got

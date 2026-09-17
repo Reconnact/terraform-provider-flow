@@ -414,7 +414,7 @@ func (c computeLoadBalancerPoolResource) Delete(ctx context.Context, request res
 	}
 
 	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
-	if err != nil {
+	if err != nil && !isNotFound(err) {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		return
 	}

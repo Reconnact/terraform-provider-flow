@@ -95,9 +95,19 @@ func waitForOrder(ctx context.Context, service common.OrderService, ordering com
 	return order, err
 }
 
+type terminalError struct{ err error }
+
+func (t terminalError) Error() string { return t.err.Error() }
+func (t terminalError) Unwrap() error { return t.err }
+
+func stopWaiting(err error) error {
+	return terminalError{err: err}
+}
+
 // waitFor polls check until it reports done, the deadline passes or the
 // context is cancelled — an error from check does not abort the wait, it only
-// surfaces in the timeout error if it never went away
+// surfaces in the timeout error if it never went away, unless the check marks
+// it terminal with stopWaiting
 func waitFor(ctx context.Context, timeout, interval time.Duration, name string, check func(ctx context.Context) (bool, error)) error {
 	start := time.Now()
 	deadline := start.Add(remaining(ctx, timeout))
@@ -109,6 +119,10 @@ func waitFor(ctx context.Context, timeout, interval time.Duration, name string, 
 			return nil
 		}
 		if err != nil {
+			var terminal terminalError
+			if errors.As(err, &terminal) {
+				return fmt.Errorf("waiting for %s: %w", name, terminal.err)
+			}
 			lastErr = err
 		}
 
