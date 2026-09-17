@@ -240,7 +240,11 @@ func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, reque
 		create.ICMPCode = int(config.ICMP.Code.ValueInt64())
 	}
 
-	rule, err := r.securityGroupService.Rules(securityGroupID).Create(ctx, create)
+	var rule macbaremetal.SecurityGroupRule
+	err := retryCreate(ctx, "create security group rule", func() (err error) {
+		rule, err = r.securityGroupService.Rules(securityGroupID).Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create security group rule: %s", err))
 		return
@@ -266,6 +270,10 @@ func (r macBareMetalSecurityGroupRuleResource) Read(ctx context.Context, request
 
 	list, err := r.securityGroupService.Rules(securityGroupID).List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("security group %d", securityGroupID))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security group rules: %s", err))
 		return
 	}
@@ -280,7 +288,7 @@ func (r macBareMetalSecurityGroupRuleResource) Read(ctx context.Context, request
 		}
 	}
 
-	response.Diagnostics.AddError("Not Found", fmt.Sprintf("security group rule %d could not be found", ruleID))
+	removeGone(ctx, response, fmt.Sprintf("security group rule %d", ruleID))
 }
 
 func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
@@ -317,7 +325,11 @@ func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, reque
 		update.ICMPCode = int(config.ICMP.Code.ValueInt64())
 	}
 
-	rule, err := r.securityGroupService.Rules(securityGroupID).Update(ctx, ruleID, update)
+	var rule macbaremetal.SecurityGroupRule
+	err := retry(ctx, "update security group rule", func() (err error) {
+		rule, err = r.securityGroupService.Rules(securityGroupID).Update(ctx, ruleID, update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security group rule: %s", err))
 		return
@@ -340,7 +352,9 @@ func (r macBareMetalSecurityGroupRuleResource) Delete(ctx context.Context, reque
 	securityGroupID := int(state.SecurityGroupID.ValueInt64())
 	ruleID := int(state.ID.ValueInt64())
 
-	err := r.securityGroupService.Rules(securityGroupID).Delete(ctx, ruleID)
+	err := retryDelete(ctx, "delete security group rule", func() error {
+		return r.securityGroupService.Rules(securityGroupID).Delete(ctx, ruleID)
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group rule: %s", err))
 		return

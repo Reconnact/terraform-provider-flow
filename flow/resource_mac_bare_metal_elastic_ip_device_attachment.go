@@ -111,7 +111,11 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Create(ctx context.Contex
 		NetworkInterfaceID: int(config.NetworkInterfaceID.ValueInt64()),
 	}
 
-	elasticIP, err := macbaremetal.NewAttachedElasticIPService(c.client, serverID).Attach(ctx, attach)
+	var elasticIP macbaremetal.ElasticIP
+	err := retry(ctx, "attach elastic ip", func() (err error) {
+		elasticIP, err = macbaremetal.NewAttachedElasticIPService(c.client, serverID).Attach(ctx, attach)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to attach elastic ip: %s", err))
 		return
@@ -148,17 +152,30 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Read(ctx context.Context,
 
 	device, err := macbaremetal.NewDeviceService(c.client).Get(ctx, int(state.DeviceID.ValueInt64()))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("device %d", state.DeviceID.ValueInt64()))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get device: %s", err))
 		return
 	}
 
-	elasticIP, diagnostics := findMacBareMetalElasticIP(ctx, c.elasticIPService, int(state.ElasticIPID.ValueInt64()))
-	response.Diagnostics.Append(diagnostics...)
-	if response.Diagnostics.HasError() {
+	elasticIP, found, err := findMacBareMetalElasticIP(ctx, c.elasticIPService, int(state.ElasticIPID.ValueInt64()))
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+	if !found {
+		removeGone(ctx, response, fmt.Sprintf("elastic ip %d", state.ElasticIPID.ValueInt64()))
 		return
 	}
 
 	state.FromEntity(device, elasticIP)
+
+	if state.NetworkInterfaceID.IsNull() {
+		removeGone(ctx, response, fmt.Sprintf("attachment of elastic ip %d to device %d", state.ElasticIPID.ValueInt64(), state.DeviceID.ValueInt64()))
+		return
+	}
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
@@ -176,7 +193,9 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Delete(ctx context.Contex
 		return
 	}
 
-	err := macbaremetal.NewAttachedElasticIPService(c.client, int(state.DeviceID.ValueInt64())).Detach(ctx, int(state.ElasticIPID.ValueInt64()))
+	err := retryDelete(ctx, "detach elastic ip", func() error {
+		return macbaremetal.NewAttachedElasticIPService(c.client, int(state.DeviceID.ValueInt64())).Detach(ctx, int(state.ElasticIPID.ValueInt64()))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach elastic ip: %s", err))
 		return

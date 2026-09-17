@@ -6,7 +6,6 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/macbaremetal"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -92,7 +91,11 @@ func (r macBareMetalElasticIPResource) Create(ctx context.Context, request resou
 		LocationID: int(config.LocationID.ValueInt64()),
 	}
 
-	elasticIP, err := r.elasticIPService.Create(ctx, create)
+	var elasticIP macbaremetal.ElasticIP
+	err := retryCreate(ctx, "create elastic ip", func() (err error) {
+		elasticIP, err = r.elasticIPService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create elastic ip: %s", err))
 		return
@@ -118,9 +121,13 @@ func (r macBareMetalElasticIPResource) Read(ctx context.Context, request resourc
 		return
 	}
 
-	elasticIP, diagnostics := findMacBareMetalElasticIP(ctx, r.elasticIPService, int(state.ID.ValueInt64()))
-	response.Diagnostics.Append(diagnostics...)
-	if response.Diagnostics.HasError() {
+	elasticIP, found, err := findMacBareMetalElasticIP(ctx, r.elasticIPService, int(state.ID.ValueInt64()))
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", err.Error())
+		return
+	}
+	if !found {
+		removeGone(ctx, response, fmt.Sprintf("elastic ip %d", state.ID.ValueInt64()))
 		return
 	}
 
@@ -142,7 +149,9 @@ func (r macBareMetalElasticIPResource) Delete(ctx context.Context, request resou
 		return
 	}
 
-	err := r.elasticIPService.Delete(ctx, int(state.ID.ValueInt64()))
+	err := retryDelete(ctx, "delete elastic ip", func() error {
+		return r.elasticIPService.Delete(ctx, int(state.ID.ValueInt64()))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete elastic ip: %s", err))
 		return
@@ -157,19 +166,17 @@ func (r macBareMetalElasticIPResource) ImportState(ctx context.Context, request 
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-func findMacBareMetalElasticIP(ctx context.Context, service macbaremetal.ElasticIPService, id int) (elasticIP macbaremetal.ElasticIP, diagnostics diag.Diagnostics) {
+func findMacBareMetalElasticIP(ctx context.Context, service macbaremetal.ElasticIPService, id int) (elasticIP macbaremetal.ElasticIP, found bool, err error) {
 	list, err := service.List(ctx, goclient.Cursor{NoFilter: 1})
 	if err != nil {
-		diagnostics.AddError("Client Error", fmt.Sprintf("unable to list elastic ips: %s", err))
-		return
+		return elasticIP, false, fmt.Errorf("unable to list elastic ips: %w", err)
 	}
 
 	for _, elasticIP = range list.Items {
 		if elasticIP.ID == id {
-			return
+			return elasticIP, true, nil
 		}
 	}
 
-	diagnostics.AddError("Not Found", fmt.Sprintf("unable to find elastic ip with id %d", id))
-	return
+	return macbaremetal.ElasticIP{}, false, nil
 }

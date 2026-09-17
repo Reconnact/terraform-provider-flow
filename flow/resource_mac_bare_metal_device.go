@@ -150,7 +150,11 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource
 		Password:        config.Password.ValueString(),
 	}
 
-	ordering, err := m.deviceService.Create(ctx, create)
+	var ordering common.Ordering
+	err := retryCreate(ctx, "create device", func() (err error) {
+		ordering, err = m.deviceService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create device: %s", err))
 		return
@@ -189,6 +193,10 @@ func (m macBareMetalDeviceResource) Read(ctx context.Context, request resource.R
 
 	device, err := m.deviceService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("device %d", state.ID.ValueInt64()))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get device: %s", err))
 		return
 	}
@@ -218,7 +226,11 @@ func (m macBareMetalDeviceResource) Update(ctx context.Context, request resource
 		Name: config.Name.ValueString(),
 	}
 
-	device, err := m.deviceService.Update(ctx, int(state.ID.ValueInt64()), update)
+	var device macbaremetal.Device
+	err := retry(ctx, "update device", func() (err error) {
+		device, err = m.deviceService.Update(ctx, int(state.ID.ValueInt64()), update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update device: %s", err))
 		return
@@ -239,7 +251,9 @@ func (m macBareMetalDeviceResource) Delete(ctx context.Context, request resource
 		return
 	}
 
-	err := m.deviceService.Delete(ctx, int(state.ID.ValueInt64()))
+	err := retryDelete(ctx, "delete device", func() error {
+		return m.deviceService.Delete(ctx, int(state.ID.ValueInt64()))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete device: %s", err))
 		return

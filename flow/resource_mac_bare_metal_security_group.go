@@ -91,7 +91,11 @@ func (r macBareMetalSecurityGroupResource) Create(ctx context.Context, request r
 		NetworkID:   int(config.NetworkID.ValueInt64()),
 	}
 
-	securityGroup, err := r.securityGroupService.Create(ctx, create)
+	var securityGroup macbaremetal.SecurityGroup
+	err := retryCreate(ctx, "create security group", func() (err error) {
+		securityGroup, err = r.securityGroupService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create security group: %s", err))
 		return
@@ -114,7 +118,11 @@ func (r macBareMetalSecurityGroupResource) Read(ctx context.Context, request res
 
 	securityGroup, err := r.securityGroupService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security groups: %s", err))
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("security group %d", state.ID.ValueInt64()))
+			return
+		}
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get security group: %s", err))
 		return
 	}
 
@@ -163,7 +171,9 @@ func (r macBareMetalSecurityGroupResource) Delete(ctx context.Context, request r
 		return
 	}
 
-	err := r.securityGroupService.Delete(ctx, int(state.ID.ValueInt64()))
+	err := retryDelete(ctx, "delete security group", func() error {
+		return r.securityGroupService.Delete(ctx, int(state.ID.ValueInt64()))
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group: %s", err))
 		return
