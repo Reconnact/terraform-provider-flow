@@ -60,6 +60,10 @@ func (c macBareMetalNetworkDataSourceData) AppliesTo(network macbaremetal.Networ
 		return false
 	}
 
+	if !c.LocationID.IsNull() && network.Location.ID != int(c.LocationID.ValueInt64()) {
+		return false
+	}
+
 	return true
 }
 

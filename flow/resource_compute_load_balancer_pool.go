@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -187,18 +188,26 @@ func (c computeLoadBalancerPoolResource) Schema(ctx context.Context, request res
 						},
 					},
 					"interval": schema.StringAttribute{
-						MarkdownDescription: "interval duration of the health check",
+						MarkdownDescription: "interval duration of the health check, at least one second",
 						Optional:            true,
 						Computed:            true,
+						Validators: []validator.String{
+							secondsDuration(),
+						},
 						PlanModifiers: []planmodifier.String{
+							normalizedSecondsDuration(),
 							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
 					"timeout": schema.StringAttribute{
-						MarkdownDescription: "timeout duration of the health check",
+						MarkdownDescription: "timeout duration of the health check, at least one second",
 						Optional:            true,
 						Computed:            true,
+						Validators: []validator.String{
+							secondsDuration(),
+						},
 						PlanModifiers: []planmodifier.String{
+							normalizedSecondsDuration(),
 							stringplanmodifier.UseStateForUnknown(),
 						},
 					},

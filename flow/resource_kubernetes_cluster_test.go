@@ -9,7 +9,6 @@ import (
 )
 
 func TestAccKubernetesCluster_Basic(t *testing.T) {
-	//TODO: Investigate dev issue
 	t.Skip("dev never runs the cluster-delete job")
 
 	clusterName := acctest.RandomWithPrefix("test-cluster")

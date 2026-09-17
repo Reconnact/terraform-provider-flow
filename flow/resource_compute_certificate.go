@@ -134,7 +134,6 @@ func (c computeCertificateResource) Schema(ctx context.Context, request resource
 				MarkdownDescription: "certificate in base64 encoded PEM format",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
-					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
@@ -143,7 +142,6 @@ func (c computeCertificateResource) Schema(ctx context.Context, request resource
 				Required:            true,
 				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
-					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					stringplanmodifier.RequiresReplace(),
 				},
 			},

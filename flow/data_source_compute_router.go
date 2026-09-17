@@ -31,6 +31,11 @@ func (c *computeRouterDataSourceData) FromEntity(router compute.Router) {
 	c.Name = types.StringValue(router.Name)
 	c.LocationID = types.Int64Value(int64(router.Location.ID))
 	c.Public = types.BoolValue(router.Public)
+
+	c.PublicIP = types.StringNull()
+	if router.Public {
+		c.PublicIP = types.StringValue(router.PublicIP)
+	}
 }
 
 func (c computeRouterDataSourceData) AppliesTo(router compute.Router) bool {

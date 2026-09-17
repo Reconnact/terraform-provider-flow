@@ -33,8 +33,7 @@ type computeLoadBalancerMemberResourceData struct {
 	Name    types.String `tfsdk:"name"`
 	Address types.String `tfsdk:"address"`
 	Port    types.Int64  `tfsdk:"port"`
-
-	// TODO status
+	Status  types.String `tfsdk:"status"`
 
 	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
@@ -47,6 +46,7 @@ func (c *computeLoadBalancerMemberResourceData) FromEntity(loadBalancerID, poolI
 	c.Name = types.StringValue(member.Name)
 	c.Address = types.StringValue(member.Address)
 	c.Port = types.Int64Value(int64(member.Port))
+	c.Status = types.StringValue(member.Status.Key)
 }
 
 func (c computeLoadBalancerMemberResourceData) AppliesTo(member compute.LoadBalancerMember) bool {
@@ -99,6 +99,10 @@ func (c computeLoadBalancerMemberResource) Schema(ctx context.Context, request r
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.RequiresReplace(),
 				},
+			},
+			"status": schema.StringAttribute{
+				MarkdownDescription: "current status of the load balancer member, as a stable key (`active`, `disabled`, `working`, `degraded`, `error`)",
+				Computed:            true,
 			},
 		},
 		Blocks: map[string]schema.Block{

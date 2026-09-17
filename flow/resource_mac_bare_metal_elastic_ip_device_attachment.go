@@ -43,7 +43,7 @@ func (m *macBareMetalElasticIPDeviceAttachmentResourceData) FromEntity(
 
 func (m macBareMetalElasticIPDeviceAttachmentResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Import: `terraform import flow_mac_bare_metal_elastic_ip_device_attachment.<name> <device_id>:<elastic_ip_id>`",
+		MarkdownDescription: "Import: `terraform import flow_mac_bare_metal_elastic_ip_attachment.<name> <device_id>:<elastic_ip_id>`",
 		Attributes: map[string]schema.Attribute{
 			"device_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the device to attach the elastic ip to",

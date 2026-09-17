@@ -46,8 +46,8 @@ Optional:
 
 - `healthy_threshold` (Number) number of successful health checks before considering the target healthy
 - `http` (Attributes) (see [below for nested schema](#nestedatt--health_check--http))
-- `interval` (String) interval duration of the health check
-- `timeout` (String) timeout duration of the health check
+- `interval` (String) interval duration of the health check, at least one second
+- `timeout` (String) timeout duration of the health check, at least one second
 - `unhealthy_threshold` (Number) number of failed health checks before considering the target unhealthy
 
 <a id="nestedatt--health_check--http"></a>

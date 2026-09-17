@@ -57,7 +57,6 @@ func (c computeKeyPairResource) Schema(ctx context.Context, request resource.Sch
 				MarkdownDescription: "public key of the key pair",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
-					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					stringplanmodifier.RequiresReplace(),
 				},
 			},

@@ -3,22 +3,29 @@
 ## Unreleased (planned as v1.2.0)
 
 ### New
-- `flow_compute_snapshot` resource — it was implemented but never registered, only the data source
-  was reachable. Creates a snapshot of a volume; `name` updates in place, `volume_id` replaces.
-- Every resource that waits for the backend to catch up now takes a `timeouts {}` block, with only the
-  operations that actually wait on offer. A `create = "45m"` means forty-five minutes until the resource is
-  usable, not forty-five per step. Left out, each wait keeps the deadline it had before, and the
-  generated docs name that default per operation.
-- A `flow_compute_volume_attachment` whose `timeouts` block is the only change no longer detaches
-  and re-attaches the volume.
+- `flow_compute_snapshot` resource — implemented but never registered.
+- `timeouts {}` on every resource that waits.
+- `status` on `flow_compute_load_balancer_member` and its data source.
+
+### Fixes
+- A create, attach or expand the api accepted survives a failed read-back or wait — no more billed
+  resources outside terraform.
+- Mac bare metal resources retry their api calls and drop resources deleted outside terraform.
+- Destroying a load balancer pool or member whose load balancer is gone no longer polls for ten minutes.
+- State matches the api after an update: server network attributes, security group description, rules
+  switched between tcp/udp and icmp.
+- An empty `token` or `FLOW_TOKEN` is reported at configure time, not on the first api call.
+- `flow_kubernetes_cluster` rejects `version_id` in a create plan; setting it later upgrades.
+- Load balancer pool `interval` and `timeout` take any duration spelling, one second minimum.
+- Four data sources report fields they declared but never filled; `flow_compute_certificate` stops
+  failing every read.
+- Also: no crash reading a load balancer whose interface is not attached, no detach or failed apply on
+  a `timeouts {}`-only change, and `flow_mac_bare_metal_security_group_rule` can be imported.
 
 ### Dependencies
-- terraform-plugin-framework v0.10.0 → v1.19.0, terraform-plugin-go v0.13.0 → v0.31.0; the test
-  stack moves from terraform-plugin-sdk/v2 to terraform-plugin-testing v1.16.0. No change in
-  behaviour: schemas, plans and state are the same, the generated docs are byte-identical.
-- The acceptance-test CI matrix runs Terraform 1.5 and 1.15 instead of 1.2.
-- New: terraform-plugin-framework-timeouts v0.7.0, which provides the `timeouts {}` schema and its
-  duration validator.
+- framework v0.10.0 → v1.19.0, plugin-go v0.13.0 → v0.31.0, tests on plugin-testing v1.16.0; no
+  behaviour change, generated docs byte-identical.
+- New: terraform-plugin-framework-timeouts v0.7.0. CI matrix on Terraform 1.5 and 1.15 instead of 1.2.
 
 ## Unreleased (planned as v1.1.3)
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -20,6 +21,7 @@ var (
 	_ resource.Resource                     = (*macBareMetalSecurityGroupRuleResource)(nil)
 	_ resource.ResourceWithConfigure        = (*macBareMetalSecurityGroupRuleResource)(nil)
 	_ resource.ResourceWithConfigValidators = (*macBareMetalSecurityGroupRuleResource)(nil)
+	_ resource.ResourceWithImportState      = (*macBareMetalSecurityGroupRuleResource)(nil)
 )
 
 var macBareMetalProtocolNumberToName = map[int]string{
@@ -119,6 +121,7 @@ func (r *macBareMetalSecurityGroupRuleResourceData) FromEntity(securityGroupID i
 
 func (r macBareMetalSecurityGroupRuleResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
+		MarkdownDescription: "Import: `terraform import flow_mac_bare_metal_security_group_rule.<name> <security_group_id>:<id>`",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the security group rule",
@@ -361,6 +364,10 @@ func (r macBareMetalSecurityGroupRuleResource) Delete(ctx context.Context, reque
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group rule: %s", err))
 		return
 	}
+}
+
+func (r macBareMetalSecurityGroupRuleResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
+	importStateCompositeInt64IDs(ctx, request, response, path.Root("security_group_id"), path.Root("id"))
 }
 
 func (r macBareMetalSecurityGroupRuleResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {

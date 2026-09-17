@@ -16,7 +16,6 @@ var protoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, erro
 	)),
 }
 
-// TODO: run tests parallel once the metrics bug in the api is fixed
 // testAccSequential runs a test case without t.Parallel() — the api cannot
 // create two billable objects for one org at the same time (metrics table,
 // "Record has changed since last read"), a parallel run fails at random.

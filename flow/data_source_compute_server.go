@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -117,12 +116,10 @@ func (c *computeServerDataSource) Configure(ctx context.Context, request datasou
 	}
 
 	c.serverService = compute.NewServerService(client)
-	c.orderService = common.NewOrderService(client)
 }
 
 type computeServerDataSource struct {
 	serverService compute.ServerService
-	orderService  common.OrderService
 }
 
 func (c computeServerDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {

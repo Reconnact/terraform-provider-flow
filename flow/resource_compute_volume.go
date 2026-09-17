@@ -68,7 +68,6 @@ func (t computeVolumeResource) Schema(ctx context.Context, request resource.Sche
 				MarkdownDescription: "size in GiB of the volume",
 				Required:            true,
 				PlanModifiers: []planmodifier.Int64{
-					// TODO not sure whether this should trigger a recreate since the data on the volume will be lost
 					int64planmodifier.RequiresReplaceIf(func(ctx context.Context, request planmodifier.Int64Request, response *int64planmodifier.RequiresReplaceIfFuncResponse) {
 						response.RequiresReplace = request.StateValue.ValueInt64() > request.PlanValue.ValueInt64()
 					}, "", "volume size cannot be decreased"),

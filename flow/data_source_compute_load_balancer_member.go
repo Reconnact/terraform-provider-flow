@@ -26,8 +26,7 @@ type computeLoadBalancerMemberDataSourceData struct {
 	Name    types.String `tfsdk:"name"`
 	Address types.String `tfsdk:"address"`
 	Port    types.Int64  `tfsdk:"port"`
-
-	// TODO status
+	Status  types.String `tfsdk:"status"`
 }
 
 func (c *computeLoadBalancerMemberDataSourceData) FromEntity(loadBalancerID, poolID int, member compute.LoadBalancerMember) {
@@ -38,6 +37,7 @@ func (c *computeLoadBalancerMemberDataSourceData) FromEntity(loadBalancerID, poo
 	c.Name = types.StringValue(member.Name)
 	c.Address = types.StringValue(member.Address)
 	c.Port = types.Int64Value(int64(member.Port))
+	c.Status = types.StringValue(member.Status.Key)
 }
 
 func (c computeLoadBalancerMemberDataSourceData) AppliesTo(member compute.LoadBalancerMember) bool {
@@ -90,6 +90,10 @@ func (c computeLoadBalancerMemberDataSource) Schema(ctx context.Context, request
 			"port": schema.Int64Attribute{
 				MarkdownDescription: "port of the load balancer member",
 				Optional:            true,
+				Computed:            true,
+			},
+			"status": schema.StringAttribute{
+				MarkdownDescription: "current status of the load balancer member, as a stable key (`active`, `disabled`, `working`, `degraded`, `error`)",
 				Computed:            true,
 			},
 		},

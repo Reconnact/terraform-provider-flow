@@ -30,6 +30,7 @@ Import: `terraform import flow_compute_load_balancer_member.<name> <load_balance
 ### Read-Only
 
 - `id` (Number) unique identifier of the load balancer member
+- `status` (String) current status of the load balancer member, as a stable key (`active`, `disabled`, `working`, `degraded`, `error`)
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`

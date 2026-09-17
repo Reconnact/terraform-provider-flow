@@ -154,7 +154,6 @@ func (c computeServerResource) Schema(ctx context.Context, request resource.Sche
 				Optional:            true,
 				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
-					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
@@ -162,7 +161,6 @@ func (c computeServerResource) Schema(ctx context.Context, request resource.Sche
 				MarkdownDescription: "cloud init script",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
-					// TODO: write-only once the framework is on 1.x (Terraform ≥ 1.11 WriteOnly attributes) — until then an imported resource plans a replace here because the api never returns the value
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
