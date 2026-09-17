@@ -219,10 +219,12 @@ func (c *computeSecurityGroupRuleResource) Configure(ctx context.Context, reques
 		return
 	}
 
+	c.client = client
 	c.securityGroupService = compute.NewSecurityGroupService(client)
 }
 
 type computeSecurityGroupRuleResource struct {
+	client               goclient.Client
 	securityGroupService compute.SecurityGroupService
 }
 
@@ -235,7 +237,7 @@ func (c computeSecurityGroupRuleResource) Create(ctx context.Context, request re
 	}
 
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
-	create := compute.SecurityGroupRuleOptions{
+	create := securityGroupRuleBody{
 		Direction:             config.Direction.ValueString(),
 		Protocol:              config.Protocol.ToNumber(),
 		IPRange:               config.IPRange.ValueString(),
@@ -248,13 +250,13 @@ func (c computeSecurityGroupRuleResource) Create(ctx context.Context, request re
 	}
 
 	if config.ICMP != nil {
-		create.ICMPType = int(config.ICMP.Type.ValueInt64())
-		create.ICMPCode = int(config.ICMP.Code.ValueInt64())
+		create.ICMPType = intPointer(config.ICMP.Type)
+		create.ICMPCode = intPointer(config.ICMP.Code)
 	}
 
 	var rule compute.SecurityGroupRule
 	err := retryCreate(ctx, "create security group rule", func() (err error) {
-		rule, err = c.securityGroupService.Rules(securityGroupID).Create(ctx, create)
+		rule, err = createComputeSecurityGroupRule(ctx, c.client, securityGroupID, create)
 		return err
 	})
 	if err != nil {
@@ -321,7 +323,7 @@ func (c computeSecurityGroupRuleResource) Update(ctx context.Context, request re
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
 	ruleID := int(state.ID.ValueInt64())
 
-	update := compute.SecurityGroupRuleOptions{
+	update := securityGroupRuleBody{
 		Direction:             config.Direction.ValueString(),
 		Protocol:              config.Protocol.ToNumber(),
 		IPRange:               config.IPRange.ValueString(),
@@ -334,13 +336,13 @@ func (c computeSecurityGroupRuleResource) Update(ctx context.Context, request re
 	}
 
 	if config.ICMP != nil {
-		update.ICMPType = int(config.ICMP.Type.ValueInt64())
-		update.ICMPCode = int(config.ICMP.Code.ValueInt64())
+		update.ICMPType = intPointer(config.ICMP.Type)
+		update.ICMPCode = intPointer(config.ICMP.Code)
 	}
 
 	var rule compute.SecurityGroupRule
 	err := retry(ctx, "update security group rule", func() (err error) {
-		rule, err = c.securityGroupService.Rules(securityGroupID).Update(ctx, ruleID, update)
+		rule, err = updateComputeSecurityGroupRule(ctx, c.client, securityGroupID, ruleID, update)
 		return err
 	})
 	if err != nil {

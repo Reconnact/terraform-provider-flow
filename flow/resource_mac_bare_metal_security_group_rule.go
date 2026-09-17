@@ -213,10 +213,12 @@ func (r *macBareMetalSecurityGroupRuleResource) Configure(ctx context.Context, r
 		return
 	}
 
+	r.client = client
 	r.securityGroupService = macbaremetal.NewSecurityGroupService(client)
 }
 
 type macBareMetalSecurityGroupRuleResource struct {
+	client               goclient.Client
 	securityGroupService macbaremetal.SecurityGroupService
 }
 
@@ -229,7 +231,7 @@ func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, reque
 	}
 
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
-	create := macbaremetal.SecurityGroupRuleOptions{
+	create := securityGroupRuleBody{
 		Direction: config.Direction.ValueString(),
 		Protocol:  config.Protocol.ToNumber(),
 		IPRange:   config.IPRange.ValueString(),
@@ -241,13 +243,13 @@ func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, reque
 	}
 
 	if config.ICMP != nil {
-		create.ICMPType = int(config.ICMP.Type.ValueInt64())
-		create.ICMPCode = int(config.ICMP.Code.ValueInt64())
+		create.ICMPType = intPointer(config.ICMP.Type)
+		create.ICMPCode = intPointer(config.ICMP.Code)
 	}
 
 	var rule macbaremetal.SecurityGroupRule
 	err := retryCreate(ctx, "create security group rule", func() (err error) {
-		rule, err = r.securityGroupService.Rules(securityGroupID).Create(ctx, create)
+		rule, err = createMacBareMetalSecurityGroupRule(ctx, r.client, securityGroupID, create)
 		return err
 	})
 	if err != nil {
@@ -314,7 +316,7 @@ func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, reque
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
 	ruleID := int(state.ID.ValueInt64())
 
-	update := macbaremetal.SecurityGroupRuleOptions{
+	update := securityGroupRuleBody{
 		Direction: config.Direction.ValueString(),
 		Protocol:  config.Protocol.ToNumber(),
 		IPRange:   config.IPRange.ValueString(),
@@ -326,13 +328,13 @@ func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, reque
 	}
 
 	if config.ICMP != nil {
-		update.ICMPType = int(config.ICMP.Type.ValueInt64())
-		update.ICMPCode = int(config.ICMP.Code.ValueInt64())
+		update.ICMPType = intPointer(config.ICMP.Type)
+		update.ICMPCode = intPointer(config.ICMP.Code)
 	}
 
 	var rule macbaremetal.SecurityGroupRule
 	err := retry(ctx, "update security group rule", func() (err error) {
-		rule, err = r.securityGroupService.Rules(securityGroupID).Update(ctx, ruleID, update)
+		rule, err = updateMacBareMetalSecurityGroupRule(ctx, r.client, securityGroupID, ruleID, update)
 		return err
 	})
 	if err != nil {

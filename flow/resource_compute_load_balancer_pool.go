@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -258,10 +259,12 @@ func (c *computeLoadBalancerPoolResource) Configure(ctx context.Context, request
 		return
 	}
 
+	c.client = client
 	c.loadBalancerService = compute.NewLoadBalancerService(client)
 }
 
 type computeLoadBalancerPoolResource struct {
+	client              goclient.Client
 	loadBalancerService compute.LoadBalancerService
 }
 
@@ -370,16 +373,19 @@ func (c computeLoadBalancerPoolResource) Update(ctx context.Context, request res
 	loadBalancerID := int(state.LoadBalancerID.ValueInt64())
 	poolID := int(state.ID.ValueInt64())
 
-	update := compute.LoadBalancerPoolUpdate{
-		CertificateID:        int(config.CertificateID.ValueInt64()),
-		BalancingAlgorithmID: int(config.BalancingAlgorithmID.ValueInt64()),
-		StickySession:        config.StickySession.ValueBool(),
-		HealthCheck:          healthCheck,
+	update := loadBalancerPoolUpdateBody{
+		CertificateID:        intPointer(config.CertificateID),
+		BalancingAlgorithmID: intPointer(config.BalancingAlgorithmID),
+		StickySession:        boolPointer(config.StickySession),
+	}
+
+	if !sameHealthCheck(state.HealthCheck, healthCheck) {
+		update.HealthCheck = &healthCheck
 	}
 
 	var pool compute.LoadBalancerPool
 	err := retry(ctx, "update load balancer pool", func() (err error) {
-		pool, err = c.loadBalancerService.Pools(loadBalancerID).Update(ctx, poolID, update)
+		pool, err = updateLoadBalancerPool(ctx, c.client, loadBalancerID, poolID, update)
 		return err
 	})
 	if err != nil {
@@ -427,6 +433,15 @@ func (c computeLoadBalancerPoolResource) Delete(ctx context.Context, request res
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		return
 	}
+}
+
+func sameHealthCheck(state *computeLoadBalancerHealthCheckResourceData, planned compute.LoadBalancerHealthCheckOptions) bool {
+	if state == nil {
+		return false
+	}
+
+	current, diagnostics := convertHealthCheckConfigToAPIOptions(*state)
+	return !diagnostics.HasError() && current == planned
 }
 
 func convertHealthCheckConfigToAPIOptions(config computeLoadBalancerHealthCheckResourceData) (options compute.LoadBalancerHealthCheckOptions, diagnostics diag.Diagnostics) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -96,10 +97,12 @@ func (c *computeRouterResource) Configure(ctx context.Context, request resource.
 		return
 	}
 
+	c.client = client
 	c.routerService = compute.NewRouterService(client)
 }
 
 type computeRouterResource struct {
+	client        goclient.Client
 	routerService compute.RouterService
 }
 
@@ -177,14 +180,14 @@ func (c computeRouterResource) Update(ctx context.Context, request resource.Upda
 		return
 	}
 
-	update := compute.RouterUpdate{
+	update := routerUpdateBody{
 		Name:   config.Name.ValueString(),
-		Public: config.Public.ValueBool(),
+		Public: boolPointer(config.Public),
 	}
 
 	var router compute.Router
 	err := retry(ctx, "update router", func() (err error) {
-		router, err = c.routerService.Update(ctx, int(state.ID.ValueInt64()), update)
+		router, err = updateRouter(ctx, c.client, int(state.ID.ValueInt64()), update)
 		return err
 	})
 	if err != nil {

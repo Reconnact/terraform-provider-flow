@@ -13,24 +13,13 @@
 - `status` on `flow_compute_load_balancer_member` and its data source.
 
 ### Fixes
-- A create, attach or expand the api accepted survives a failed read-back or wait — no more billed
-  resources outside terraform.
-- Mac bare metal resources retry their api calls and drop resources deleted outside terraform.
-- Destroying a load balancer pool or member whose load balancer is gone no longer polls for ten minutes.
-- State matches the api after an update: server network attributes, security group description, rules
-  switched between tcp/udp and icmp.
-- An empty `token` or `FLOW_TOKEN` is reported at configure time, not on the first api call.
-- `flow_kubernetes_cluster` rejects `version_id` in a create plan; setting it later upgrades.
-- A cluster upgrade the api refuses because the cluster's variables do not fit the target version's
-  schema now names that as the reason instead of a bare `invalid property` error.
-- Load balancer pool `interval` and `timeout` take any duration spelling, one second minimum.
-- Importing a certificate, a mac bare metal device or a server with `cloud_init` no longer plans a
-  replace, and none of those values is written to the state file any more. Editing one in the config
-  produces no plan — rotate with `terraform apply -replace=`.
-- Four data sources report fields they declared but never filled; `flow_compute_certificate` stops
-  failing every read.
-- Also: no crash reading a load balancer whose interface is not attached, no detach or failed apply on
-  a `timeouts {}`-only change, and `flow_mac_bare_metal_security_group_rule` can be imported.
+- Resources the api created are no longer lost from the state when a later step fails.
+- Values of `false` and `0` reach the api, so settings can be switched off again and ping rules work.
+- State matches the api after an update.
+- Imports no longer plan a replace, and secrets stay out of the state file.
+- Mac bare metal resources are as reliable as compute: retries, and cleanup of deleted resources.
+- Load balancer pool updates and destroys are faster and no longer rebuild the health monitor needlessly.
+- Clearer errors for kubernetes version changes and an empty token; several data source fixes.
 
 ### Dependencies
 - framework v0.10.0 → v1.19.0, plugin-go v0.13.0 → v0.31.0, tests on plugin-testing v1.16.0; no
