@@ -167,6 +167,8 @@ func (c computeServerResource) Schema(ctx context.Context, request resource.Sche
 				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait and the wait for the server to boot are bounded at 10m each"),
 				Update:            true,
 				UpdateDescription: timeoutDescription("bounds the whole update; unset, a resize is bounded at 10m per step — stop, the upgrade order, back to stopped, start — so up to 40m"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the server is given 10m to disappear"),
 			}),
 		},
 	}
@@ -366,11 +368,25 @@ func (c computeServerResource) Delete(ctx context.Context, request resource.Dele
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
+
+	serverID := int(state.ID.ValueInt64())
+
 	err := retryDelete(ctx, "delete server", func() error {
-		return c.serverService.Delete(ctx, int(state.ID.ValueInt64()), false)
+		return c.serverService.Delete(ctx, serverID, false)
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete server: %s", err))
+		return
+	}
+
+	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("server %d", serverID), func(ctx context.Context) error {
+		_, err := c.serverService.Get(ctx, serverID)
+		return err
+	})
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for server deletion: %s", err))
 		return
 	}
 }

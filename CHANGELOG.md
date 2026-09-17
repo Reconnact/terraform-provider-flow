@@ -11,13 +11,21 @@
 - `flow_compute_snapshot` resource — implemented but never registered.
 - `timeouts {}` on every resource that waits.
 - `status` on `flow_compute_load_balancer_member` and its data source.
+- `public` on `flow_compute_load_balancer` gives the load balancer a public ip, with the address in
+  `public_ip`. The api only takes it at create, so changing it replaces the load balancer.
+- `flow_compute_elastic_ip_load_balancer_attachment` attaches an elastic ip you manage to an existing
+  load balancer, the same way `flow_compute_elastic_ip_server_attachment` does for a server.
 
 ### Fixes
 - Resources the api created are no longer lost from the state when a later step fails.
 - Values of `false` and `0` reach the api, so settings can be switched off again and ping rules work.
+- Turning a router private gives up its public ip instead of failing the apply.
 - State matches the api after an update.
 - Imports no longer plan a replace, and secrets stay out of the state file.
 - Mac bare metal resources are as reliable as compute: retries, and cleanup of deleted resources.
+- A destroy waits until the api has really removed a load balancer, server, volume, snapshot or
+  device instead of returning on the delete call. Destroying a network behind a load balancer no
+  longer fails while the teardown is still running. `timeouts { delete }` bounds the wait.
 - Load balancer pool updates and destroys are faster and no longer rebuild the health monitor needlessly.
 - Clearer errors for kubernetes version changes and an empty token; several data source fixes.
 

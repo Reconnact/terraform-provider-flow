@@ -77,9 +77,40 @@ func (c computeRouterResource) Schema(ctx context.Context, request resource.Sche
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+					routerPublicIPUnknownOnChange{},
 				},
 			},
 		},
+	}
+}
+
+// The api hands out an address when a router becomes public and takes it away again when it
+// turns private. Terraform proposes the prior value for a computed attribute, so without this
+// the plan promises the old address and the apply fails with an inconsistent result.
+type routerPublicIPUnknownOnChange struct{}
+
+func (routerPublicIPUnknownOnChange) Description(ctx context.Context) string {
+	return "unknown while public changes"
+}
+
+func (routerPublicIPUnknownOnChange) MarkdownDescription(ctx context.Context) string {
+	return "unknown while public changes"
+}
+
+func (routerPublicIPUnknownOnChange) PlanModifyString(ctx context.Context, request planmodifier.StringRequest, response *planmodifier.StringResponse) {
+	if request.State.Raw.IsNull() || request.Plan.Raw.IsNull() {
+		return
+	}
+
+	var state, plan types.Bool
+	response.Diagnostics.Append(request.State.GetAttribute(ctx, path.Root("public"), &state)...)
+	response.Diagnostics.Append(request.Plan.GetAttribute(ctx, path.Root("public"), &plan)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	if !plan.Equal(state) {
+		response.PlanValue = types.StringUnknown()
 	}
 }
 

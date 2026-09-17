@@ -29,13 +29,13 @@ func TestAccComputeLoadBalancerMember_Basic(t *testing.T) {
 }
 
 // a member has to be an address in the load balancer's network, so it needs a server there
-const testAccComputeLoadBalancerMemberConfigBasic = `
+var testAccComputeLoadBalancerMemberConfigBasic = `
 resource "flow_compute_load_balancer" "foobar" {
 	name        = flow_compute_server.foobar.name
 	location_id = 1
 	network_id  = flow_compute_network.foobar.id
 }
-` + testAccComputeLoadBalancerPoolConfigBasic + `
+` + testAccComputeLoadBalancerPoolConfig(true) + `
 resource "flow_compute_load_balancer_member" "foobar" {
 	load_balancer_id = flow_compute_load_balancer.foobar.id
 	pool_id          = flow_compute_load_balancer_pool.foobar.id

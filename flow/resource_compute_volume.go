@@ -94,6 +94,8 @@ func (t computeVolumeResource) Schema(ctx context.Context, request resource.Sche
 				CreateDescription: timeoutDescription("bounds the whole create; unset, the volume is given 30m to settle, which a restore from a snapshot needs"),
 				Update:            true,
 				UpdateDescription: timeoutDescription("bounds the whole update; unset, an expand gives the volume 5m to settle"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the volume is given 10m to disappear"),
 			}),
 		},
 	}
@@ -287,11 +289,25 @@ func (r computeVolumeResource) Delete(ctx context.Context, request resource.Dele
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
+
+	volumeID := int(state.ID.ValueInt64())
+
 	err := retryDelete(ctx, "delete volume", func() error {
-		return r.volumeService.Delete(ctx, int(state.ID.ValueInt64()))
+		return r.volumeService.Delete(ctx, volumeID)
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete volume: %s", err))
+		return
+	}
+
+	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("volume %d", volumeID), func(ctx context.Context) error {
+		_, err := r.volumeService.Get(ctx, volumeID)
+		return err
+	})
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for volume deletion: %s", err))
 		return
 	}
 }

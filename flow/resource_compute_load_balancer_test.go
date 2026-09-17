@@ -22,6 +22,8 @@ func TestAccComputeLoadBalancer_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_load_balancer.foobar", "location_id", "1"),
 					resource.TestCheckResourceAttrPair("flow_compute_load_balancer.foobar", "network_id", "flow_compute_network.foobar", "id"),
 					resource.TestCheckResourceAttrSet("flow_compute_load_balancer.foobar", "private_ip"),
+					resource.TestCheckResourceAttr("flow_compute_load_balancer.foobar", "public", "false"),
+					resource.TestCheckNoResourceAttr("flow_compute_load_balancer.foobar", "public_ip"),
 				),
 			},
 		},

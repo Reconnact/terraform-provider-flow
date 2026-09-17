@@ -33,6 +33,9 @@ const (
 	// the longest synchronous call is the volume detach, which the backend
 	// holds for up to 30 seconds
 	responseHeaderTimeout = 2 * time.Minute
+	// a delete answers 204 while the teardown still runs — the next delete in
+	// the dependency chain fails until the resource is really gone
+	goneTimeout = 10 * time.Minute
 )
 
 type timeoutGetter func(context.Context, time.Duration) (time.Duration, diag.Diagnostics)
@@ -146,6 +149,20 @@ func waitFor(ctx context.Context, timeout, interval time.Duration, name string, 
 			return fmt.Errorf("cancelled while waiting for %s: %w", name, ctx.Err())
 		}
 	}
+}
+
+// waitForGone polls get until the api answers 404. A delete returns on the
+// api's 204 with the teardown still running, and terraform starts the next
+// delete as soon as this one returns: destroying a network right after the
+// load balancer in front of it fails while Octavia is still tearing down.
+func waitForGone(ctx context.Context, timeout time.Duration, name string, get func(ctx context.Context) error) error {
+	return waitFor(ctx, timeout, defaultWaitInterval, name+" to be gone", func(ctx context.Context) (bool, error) {
+		err := get(ctx)
+		if isNotFound(err) {
+			return true, nil
+		}
+		return false, err
+	})
 }
 
 func errString(err error) string {

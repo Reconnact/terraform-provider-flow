@@ -440,12 +440,9 @@ func (k kubernetesClusterResource) waitForClusterUnlocked(ctx context.Context, c
 // cluster deletion is queued — the delete call returns while the cluster still
 // exists, and deleting the network is refused until it is gone
 func (k kubernetesClusterResource) waitForClusterGone(ctx context.Context, clusterID int) error {
-	return waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be gone", clusterID), func(ctx context.Context) (bool, error) {
+	return waitForGone(ctx, clusterWaitTimeout, fmt.Sprintf("cluster %d", clusterID), func(ctx context.Context) error {
 		_, err := k.clusterService.Get(ctx, clusterID)
-		if statusCode(err) == http.StatusNotFound {
-			return true, nil
-		}
-		return false, err
+		return err
 	})
 }
 

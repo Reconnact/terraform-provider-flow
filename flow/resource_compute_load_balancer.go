@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -28,6 +29,8 @@ type computeLoadBalancerResourceData struct {
 	LocationID types.Int64  `tfsdk:"location_id"`
 	NetworkID  types.Int64  `tfsdk:"network_id"`
 	PrivateIP  types.String `tfsdk:"private_ip"`
+	Public     types.Bool   `tfsdk:"public"`
+	PublicIP   types.String `tfsdk:"public_ip"`
 
 	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
@@ -37,11 +40,19 @@ func (c *computeLoadBalancerResourceData) FromEntity(loadBalancer compute.LoadBa
 	c.Name = types.StringValue(loadBalancer.Name)
 	c.LocationID = types.Int64Value(int64(loadBalancer.Location.ID))
 
+	c.Public = types.BoolValue(false)
+	c.PublicIP = types.StringNull()
+
 	if len(loadBalancer.Networks) != 0 {
 		network := loadBalancer.Networks[0]
 		c.NetworkID = types.Int64Value(int64(network.ID))
 		if len(network.Interfaces) != 0 {
 			c.PrivateIP = types.StringValue(network.Interfaces[0].PrivateIP)
+
+			if publicIP := network.Interfaces[0].PublicIP; publicIP != "" {
+				c.Public = types.BoolValue(true)
+				c.PublicIP = types.StringValue(publicIP)
+			}
 		}
 	}
 }
@@ -85,11 +96,29 @@ func (c computeLoadBalancerResource) Schema(ctx context.Context, request resourc
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"public": schema.BoolAttribute{
+				MarkdownDescription: "attaches a public ip to the load balancer, `false` when omitted. The api only takes this when the load balancer is created, so a change replaces it. To attach an ip you manage yourself, or to attach one later, leave this out and use `flow_compute_elastic_ip_load_balancer_attachment` instead",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"public_ip": schema.StringAttribute{
+				MarkdownDescription: "public ip of the load balancer, null while it has none",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 		Blocks: map[string]schema.Block{
 			"timeouts": timeouts.Block(ctx, timeouts.Opts{
 				Create:            true,
 				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait and the wait for the load balancer to become mutable are bounded at 10m each"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the load balancer is given 10m to disappear"),
 			}),
 		},
 	}
@@ -131,7 +160,7 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request resourc
 	create := compute.LoadBalancerCreate{
 		Name:             config.Name.ValueString(),
 		LocationID:       int(config.LocationID.ValueInt64()),
-		AttachExternalIP: false,
+		AttachExternalIP: config.Public.ValueBool(),
 		NetworkID:        int(config.NetworkID.ValueInt64()),
 		PrivateIP:        config.PrivateIP.ValueString(),
 	}
@@ -229,11 +258,25 @@ func (c computeLoadBalancerResource) Delete(ctx context.Context, request resourc
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
+
+	loadBalancerID := int(state.ID.ValueInt64())
+
 	err := retryDelete(ctx, "delete load balancer", func() error {
-		return c.loadBalancerService.Delete(ctx, int(state.ID.ValueInt64()))
+		return c.loadBalancerService.Delete(ctx, loadBalancerID)
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete load balancer: %s", err))
+		return
+	}
+
+	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("load balancer %d", loadBalancerID), func(ctx context.Context) error {
+		_, err := c.loadBalancerService.Get(ctx, loadBalancerID)
+		return err
+	})
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer deletion: %s", err))
 		return
 	}
 }

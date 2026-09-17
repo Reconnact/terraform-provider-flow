@@ -2,18 +2,22 @@ package flow
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/flowswiss/goclient"
+	"github.com/flowswiss/goclient/compute"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// the `timeouts {}` block as the framework hands it to a resource: null when
-// the user left it out, otherwise the durations they wrote
 func timeoutsValue(t *testing.T, create string) timeouts.Value {
 	t.Helper()
 
@@ -69,8 +73,6 @@ func TestWithTimeout(t *testing.T) {
 	}
 }
 
-// the configured budget wins over a wait's own default in both directions:
-// it shortens a long default and lengthens a short one
 func TestRemaining(t *testing.T) {
 	if got := remaining(context.Background(), time.Minute); got != time.Minute {
 		t.Errorf("without a deadline: %s, want the fallback %s", got, time.Minute)
@@ -87,8 +89,6 @@ func TestRemaining(t *testing.T) {
 	}
 }
 
-// a wait never outlives the operation's budget, however generous its own
-// default is, and the error says how long it actually waited
 func TestWaitForStopsAtTheContextDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -110,8 +110,6 @@ func TestWaitForStopsAtTheContextDeadline(t *testing.T) {
 	}
 }
 
-// without a budget the wait keeps its own default, and the last error from the
-// check survives into the timeout
 func TestWaitForReportsTheLastError(t *testing.T) {
 	err := waitFor(context.Background(), 20*time.Millisecond, 10*time.Millisecond, "a volume to settle", func(ctx context.Context) (bool, error) {
 		return false, errStub
@@ -140,8 +138,122 @@ func TestWaitForSucceeds(t *testing.T) {
 	}
 }
 
+func TestWaitForStopsOnATerminalError(t *testing.T) {
+	calls := 0
+	start := time.Now()
+	err := waitFor(context.Background(), 2*time.Second, 10*time.Millisecond, "a pool to be deleted", func(ctx context.Context) (bool, error) {
+		calls++
+		return false, stopWaiting(errStub)
+	})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("wait succeeded, want the terminal error")
+	}
+	if calls != 1 {
+		t.Errorf("checked %d times, want 1 — the wait kept polling after a terminal error", calls)
+	}
+	if elapsed > time.Second {
+		t.Errorf("waited %s, want an immediate return", elapsed)
+	}
+	if !errors.Is(err, errStub) {
+		t.Errorf("error %q does not carry the terminal error", err)
+	}
+	if strings.Contains(err.Error(), "timeout after") {
+		t.Errorf("error %q reports a timeout, so the wait ran its budget instead of stopping", err)
+	}
+	if !strings.Contains(err.Error(), "waiting for a pool to be deleted") {
+		t.Errorf("error %q does not name what it waited for", err)
+	}
+}
+
 var errStub = stubError("the volume is still working")
 
 type stubError string
 
 func (e stubError) Error() string { return string(e) }
+
+func TestWaitForGone(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("already gone returns on the first poll", func(t *testing.T) {
+		var calls int32
+		client := fakeLoadBalancerAPI(t, func(writer http.ResponseWriter) {
+			atomic.AddInt32(&calls, 1)
+			notFound(writer)
+		})
+
+		start := time.Now()
+		if err := waitForGone(ctx, goneTimeout, "load balancer 1", func(ctx context.Context) error {
+			_, err := compute.NewLoadBalancerService(client).Get(ctx, 1)
+			return err
+		}); err != nil {
+			t.Fatalf("waitForGone returned %s", err)
+		}
+
+		if got := atomic.LoadInt32(&calls); got != 1 {
+			t.Errorf("polled %d times, want 1", got)
+		}
+		if waited := time.Since(start); waited > defaultWaitInterval {
+			t.Errorf("waited %s before returning, want no sleep at all", waited.Round(time.Millisecond))
+		}
+	})
+
+	t.Run("still there keeps polling until the api answers 404", func(t *testing.T) {
+		var calls int32
+		client := fakeLoadBalancerAPI(t, func(writer http.ResponseWriter) {
+			if atomic.AddInt32(&calls, 1) == 1 {
+				writer.Header().Set("Content-Type", "application/json")
+				_, _ = writer.Write([]byte(`{"id":1,"name":"tearing-down"}`))
+				return
+			}
+			notFound(writer)
+		})
+
+		if err := waitForGone(ctx, goneTimeout, "load balancer 1", func(ctx context.Context) error {
+			_, err := compute.NewLoadBalancerService(client).Get(ctx, 1)
+			return err
+		}); err != nil {
+			t.Fatalf("waitForGone returned %s", err)
+		}
+
+		if got := atomic.LoadInt32(&calls); got != 2 {
+			t.Errorf("polled %d times, want 2", got)
+		}
+	})
+
+	t.Run("never gone times out and names the resource", func(t *testing.T) {
+		client := fakeLoadBalancerAPI(t, func(writer http.ResponseWriter) {
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"id":1,"name":"still-here"}`))
+		})
+
+		err := waitForGone(ctx, 100*time.Millisecond, "load balancer 1", func(ctx context.Context) error {
+			_, err := compute.NewLoadBalancerService(client).Get(ctx, 1)
+			return err
+		})
+		if err == nil {
+			t.Fatal("waitForGone returned no error although the load balancer never went away")
+		}
+		if want := "load balancer 1 to be gone"; !strings.Contains(err.Error(), want) {
+			t.Errorf("error is %q, want it to name %q", err, want)
+		}
+	})
+}
+
+func fakeLoadBalancerAPI(t *testing.T, handle func(writer http.ResponseWriter)) goclient.Client {
+	t.Helper()
+
+	api := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		handle(writer)
+	}))
+	t.Cleanup(api.Close)
+
+	return goclient.NewClient(goclient.WithBase(api.URL), goclient.WithToken("test"))
+}
+
+func notFound(writer http.ResponseWriter) {
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusNotFound)
+	_, _ = writer.Write([]byte(`{"error":{"message":{"en":"not found"}}}`))
+}

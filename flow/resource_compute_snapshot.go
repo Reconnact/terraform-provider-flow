@@ -76,6 +76,8 @@ func (t computeSnapshotResource) Schema(ctx context.Context, request resource.Sc
 			"timeouts": timeouts.Block(ctx, timeouts.Opts{
 				Create:            true,
 				CreateDescription: timeoutDescription("bounds the whole create; unset, the snapshot is given 30m to become available, which scales with the volume size"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the snapshot is given 10m to disappear"),
 			}),
 		},
 	}
@@ -229,11 +231,25 @@ func (r computeSnapshotResource) Delete(ctx context.Context, request resource.De
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
+
+	snapshotID := int(state.ID.ValueInt64())
+
 	err := retryDelete(ctx, "delete snapshot", func() error {
-		return r.snapshotService.Delete(ctx, int(state.ID.ValueInt64()))
+		return r.snapshotService.Delete(ctx, snapshotID)
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete snapshot: %s", err))
+		return
+	}
+
+	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("snapshot %d", snapshotID), func(ctx context.Context) error {
+		_, err := r.snapshotService.Get(ctx, snapshotID)
+		return err
+	})
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for snapshot deletion: %s", err))
 		return
 	}
 }

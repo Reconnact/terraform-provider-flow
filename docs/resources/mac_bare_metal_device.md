@@ -40,3 +40,4 @@ description: |-
 Optional:
 
 - `create` (String) bounds the whole create; unset, the order wait is bounded at 10m; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
+- `delete` (String) bounds the whole delete; unset, the device is given 10m to disappear; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"

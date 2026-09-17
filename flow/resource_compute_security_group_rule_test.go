@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccComputeSecurityGroupRule_Basic(t *testing.T) {
@@ -51,6 +52,63 @@ func TestAccComputeSecurityGroupRule_Basic(t *testing.T) {
 		},
 	})
 }
+
+// Code 0 is every ordinary ping rule, and the api rejects an icmp rule that carries only one of
+// the two fields — so a dropped 0 was a 400, not a silently wider rule. Echo request is the
+// create, echo reply the update: both send a zero, from a different code path.
+func TestAccComputeSecurityGroupRule_ICMP(t *testing.T) {
+	securityGroupName := acctest.RandomWithPrefix("test-security-group")
+
+	testAccSequential(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(testAccComputeSecurityGroupRuleConfigICMP, securityGroupName, 8, 0),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("flow_compute_security_group_rule.foobar_icmp", "id"),
+					resource.TestCheckResourceAttr("flow_compute_security_group_rule.foobar_icmp", "protocol.number", "1"),
+					resource.TestCheckResourceAttr("flow_compute_security_group_rule.foobar_icmp", "protocol.name", "icmp"),
+					resource.TestCheckResourceAttr("flow_compute_security_group_rule.foobar_icmp", "icmp.type", "8"),
+					resource.TestCheckResourceAttr("flow_compute_security_group_rule.foobar_icmp", "icmp.code", "0"),
+					resource.TestCheckNoResourceAttr("flow_compute_security_group_rule.foobar_icmp", "port_range"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(testAccComputeSecurityGroupRuleConfigICMP, securityGroupName, 0, 0),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("flow_compute_security_group_rule.foobar_icmp", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("flow_compute_security_group_rule.foobar_icmp", "icmp.type", "0"),
+					resource.TestCheckResourceAttr("flow_compute_security_group_rule.foobar_icmp", "icmp.code", "0"),
+				),
+			},
+		},
+	})
+}
+
+const testAccComputeSecurityGroupRuleConfigICMP = `
+resource "flow_compute_security_group" "foobar" {
+	name        = "%[1]s"
+	location_id = 1
+}
+
+resource "flow_compute_security_group_rule" "foobar_icmp" {
+	security_group_id = flow_compute_security_group.foobar.id
+
+	direction = "ingress"
+	protocol  = { name = "icmp" }
+
+	icmp = {
+		type = %[2]d
+		code = %[3]d
+	}
+
+	ip_range = "0.0.0.0/0"
+}
+`
 
 const testAccComputeSecurityGroupRuleConfigBasic = `
 resource "flow_compute_security_group" "foobar" {

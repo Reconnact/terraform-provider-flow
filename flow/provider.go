@@ -159,6 +159,7 @@ func (p *flowProvider) Resources(ctx context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		newComputeCertificateResource,
 		newComputeElasticIPResource,
+		newComputeElasticIPLoadBalancerAttachmentResource,
 		newComputeElasticIPServerAttachmentResource,
 		newComputeKeyPairResource,
 		newComputeLoadBalancerResource,
