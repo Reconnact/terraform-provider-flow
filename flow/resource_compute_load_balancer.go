@@ -40,7 +40,9 @@ func (c *computeLoadBalancerResourceData) FromEntity(loadBalancer compute.LoadBa
 	if len(loadBalancer.Networks) != 0 {
 		network := loadBalancer.Networks[0]
 		c.NetworkID = types.Int64Value(int64(network.ID))
-		c.PrivateIP = types.StringValue(network.Interfaces[0].PrivateIP)
+		if len(network.Interfaces) != 0 {
+			c.PrivateIP = types.StringValue(network.Interfaces[0].PrivateIP)
+		}
 	}
 }
 

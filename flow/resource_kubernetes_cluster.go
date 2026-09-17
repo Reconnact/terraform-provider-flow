@@ -69,14 +69,6 @@ func (k *kubernetesClusterResourceData) FromEntity(cluster kubernetes.Cluster) {
 	k.NodeProductID = types.Int64Value(int64(cluster.ExpectedPreset.Worker.ID))
 }
 
-type kubernetesClusterNameFilter struct {
-	Name string
-}
-
-func (f kubernetesClusterNameFilter) AppliesTo(cluster kubernetes.Cluster) bool {
-	return cluster.Name == f.Name
-}
-
 func (k kubernetesClusterResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
@@ -136,7 +128,7 @@ func (k kubernetesClusterResource) Schema(ctx context.Context, request resource.
 				},
 			},
 			"version_id": schema.Int64Attribute{
-				MarkdownDescription: "unique identifier of the kubernetes version",
+				MarkdownDescription: "unique identifier of the kubernetes version. the platform assigns it on create and it cannot be chosen; setting it on an existing cluster upgrades along the current version's upgrade paths",
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int64{
@@ -193,6 +185,15 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request resource.
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
 	if response.Diagnostics.HasError() {
+		return
+	}
+
+	if !config.VersionID.IsNull() && !config.VersionID.IsUnknown() {
+		response.Diagnostics.AddAttributeError(
+			path.Root("version_id"),
+			"Version Not Settable On Creation",
+			"the platform assigns the kubernetes version when the cluster is created; set version_id in a later apply to upgrade an existing cluster along its upgrade paths",
+		)
 		return
 	}
 

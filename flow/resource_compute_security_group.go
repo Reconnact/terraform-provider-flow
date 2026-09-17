@@ -121,7 +121,7 @@ func (c computeSecurityGroupResource) Read(ctx context.Context, request resource
 			removeGone(ctx, response, fmt.Sprintf("security group %d", state.ID.ValueInt64()))
 			return
 		}
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security groups: %s", err))
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get security group: %s", err))
 		return
 	}
 
@@ -146,12 +146,20 @@ func (c computeSecurityGroupResource) Update(ctx context.Context, request resour
 		return
 	}
 
+	// the api replaces both fields on every update: a missing description clears it
+	current, err := c.securityGroupService.Get(ctx, int(state.ID.ValueInt64()))
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get security group: %s", err))
+		return
+	}
+
 	update := compute.SecurityGroupUpdate{
-		Name: config.Name.ValueString(),
+		Name:        config.Name.ValueString(),
+		Description: current.Description,
 	}
 
 	var securityGroup compute.SecurityGroup
-	err := retry(ctx, "update security group", func() (err error) {
+	err = retry(ctx, "update security group", func() (err error) {
 		securityGroup, err = c.securityGroupService.Update(ctx, int(state.ID.ValueInt64()), update)
 		return err
 	})

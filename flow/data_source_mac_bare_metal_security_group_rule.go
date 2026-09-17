@@ -62,14 +62,14 @@ func (c *macBareMetalSecurityGroupRuleDataSourceData) FromEntity(securityGroupID
 	c.Protocol = &macBareMetalSecurityGroupRuleDataSourceProtocol{}
 	c.Protocol.FromNumber(rule.Protocol)
 
-	if rule.FromPort != 0 && rule.ToPort != 0 {
+	if rule.Protocol == macbaremetal.ProtocolTCP || rule.Protocol == macbaremetal.ProtocolUDP {
 		c.PortRange = &macBareMetalSecurityGroupRuleDataSourcePortRange{
 			From: types.Int64Value(int64(rule.FromPort)),
 			To:   types.Int64Value(int64(rule.ToPort)),
 		}
 	}
 
-	if rule.ICMPType != 0 && rule.ICMPCode != 0 {
+	if rule.Protocol == macbaremetal.ProtocolICMP {
 		c.ICMP = &macBareMetalSecurityGroupRuleDataSourceICMP{
 			Type: types.Int64Value(int64(rule.ICMPType)),
 			Code: types.Int64Value(int64(rule.ICMPCode)),

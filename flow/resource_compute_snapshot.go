@@ -189,6 +189,8 @@ func (r computeSnapshotResource) Update(ctx context.Context, request resource.Up
 	}
 
 	if config.Name.Equal(state.Name) {
+		state.Timeouts = config.Timeouts
+		response.Diagnostics.Append(response.State.Set(ctx, state)...)
 		return
 	}
 

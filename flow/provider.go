@@ -90,16 +90,24 @@ func (p *flowProvider) Configure(ctx context.Context, request provider.Configure
 		return
 	}
 
-	if data.Token.IsNull() {
-		if val, ok := os.LookupEnv("FLOW_TOKEN"); ok {
-			data.Token = types.StringValue(val)
-		} else {
-			response.Diagnostics.AddError(
-				"Missing Token",
-				"The token is missing. Please set the token in the provider configuration or set the FLOW_TOKEN environment variable.",
-			)
-			return
-		}
+	if data.Token.IsUnknown() {
+		response.Diagnostics.AddAttributeError(
+			path.Root("token"),
+			"Unknown Token",
+			"The token is not known yet (it depends on a value that is only available after apply). Use a static value, a variable or the FLOW_TOKEN environment variable.",
+		)
+		return
+	}
+
+	if data.Token.ValueString() == "" {
+		data.Token = types.StringValue(os.Getenv("FLOW_TOKEN"))
+	}
+	if data.Token.ValueString() == "" {
+		response.Diagnostics.AddError(
+			"Missing Token",
+			"The token is missing. Please set the token in the provider configuration or set the FLOW_TOKEN environment variable.",
+		)
+		return
 	}
 
 	if data.Endpoint.IsNull() {
@@ -129,6 +137,11 @@ func (p *flowProvider) Configure(ctx context.Context, request provider.Configure
 
 		defaultRetryPolicy.Timeout = timeout
 	}
+
+	tflog.Debug(ctx, "configuring flow client", map[string]interface{}{
+		"endpoint":      data.Endpoint.ValueString(),
+		"retry_timeout": defaultRetryPolicy.Timeout.String(),
+	})
 
 	client := goclient.NewClient(
 		goclient.WithToken(data.Token.ValueString()),

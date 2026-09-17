@@ -147,11 +147,23 @@ func (r macBareMetalSecurityGroupResource) Update(ctx context.Context, request r
 		return
 	}
 
-	update := macbaremetal.SecurityGroupUpdate{
-		Name: config.Name.ValueString(),
+	// the api replaces both fields on every update: a missing description clears it
+	current, err := r.securityGroupService.Get(ctx, int(state.ID.ValueInt64()))
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get security group: %s", err))
+		return
 	}
 
-	securityGroup, err := r.securityGroupService.Update(ctx, int(state.ID.ValueInt64()), update)
+	update := macbaremetal.SecurityGroupUpdate{
+		Name:        config.Name.ValueString(),
+		Description: current.Description,
+	}
+
+	var securityGroup macbaremetal.SecurityGroup
+	err = retry(ctx, "update security group", func() (err error) {
+		securityGroup, err = r.securityGroupService.Update(ctx, int(state.ID.ValueInt64()), update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security group: %s", err))
 		return

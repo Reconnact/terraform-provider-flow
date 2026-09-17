@@ -63,14 +63,14 @@ func (c *computeSecurityGroupRuleDataSourceData) FromEntity(securityGroupID int,
 	c.Protocol = &computeSecurityGroupRuleDataSourceProtocol{}
 	c.Protocol.FromNumber(rule.Protocol)
 
-	if rule.FromPort != 0 && rule.ToPort != 0 {
+	if rule.Protocol == compute.ProtocolTCP || rule.Protocol == compute.ProtocolUDP {
 		c.PortRange = &computeSecurityGroupRuleDataSourcePortRange{
 			From: types.Int64Value(int64(rule.FromPort)),
 			To:   types.Int64Value(int64(rule.ToPort)),
 		}
 	}
 
-	if rule.ICMPType != 0 && rule.ICMPCode != 0 {
+	if rule.Protocol == compute.ProtocolICMP {
 		c.ICMP = &computeSecurityGroupRuleDataSourceICMP{
 			Type: types.Int64Value(int64(rule.ICMPType)),
 			Code: types.Int64Value(int64(rule.ICMPCode)),

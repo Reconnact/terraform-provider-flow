@@ -3,7 +3,6 @@ package flow
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/compute"
@@ -285,7 +284,7 @@ func (r computeVolumeAttachmentResource) waitForVolumeStatus(ctx context.Context
 		got, err := compute.NewVolumeService(r.client).Get(ctx, volumeID)
 		if err != nil {
 			// a volume that is gone counts as detached
-			if wantStatus == compute.VolumeStatusAvailable && statusCode(err) == http.StatusNotFound {
+			if wantStatus == compute.VolumeStatusAvailable && isNotFound(err) {
 				return true, nil
 			}
 			return false, err

@@ -27,7 +27,7 @@ description: |-
 
 - `public` (Boolean) indicates if the cluster is public
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `version_id` (Number) unique identifier of the kubernetes version
+- `version_id` (Number) unique identifier of the kubernetes version. the platform assigns it on create and it cannot be chosen; setting it on an existing cluster upgrades along the current version's upgrade paths
 
 ### Read-Only
 

@@ -54,6 +54,8 @@ func (c *computeServerResourceData) FromEntity(server compute.Server) {
 		c.KeyPairID = types.Int64Value(int64(server.KeyPair.ID))
 	}
 
+	c.NetworkID = types.Int64Null()
+	c.PrivateIP = types.StringNull()
 	c.NetworkInterfaceID = types.Int64Null()
 	if len(server.Networks) != 0 {
 		network := server.Networks[0]
@@ -201,7 +203,7 @@ type computeServerResource struct {
 
 func (c computeServerResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var config computeServerResourceData
-	response.Diagnostics.Append(request.Config.Get(ctx, &config)...)
+	response.Diagnostics.Append(request.Plan.Get(ctx, &config)...)
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -335,6 +337,16 @@ func (c computeServerResource) Update(ctx context.Context, request resource.Upda
 		}
 	}
 
+	// the update and action responses leave the networks out
+	if fresh, err := c.serverService.Get(ctx, int(state.ID.ValueInt64())); err != nil {
+		response.Diagnostics.AddWarning(
+			"Incomplete Read",
+			fmt.Sprintf("server %d could not be read back after the update: %s", state.ID.ValueInt64(), err),
+		)
+	} else {
+		server = fresh
+	}
+
 	state.FromEntity(server)
 	state.Timeouts = plan.Timeouts
 
@@ -405,7 +417,11 @@ func (c computeServerResource) readSecurityGroups(ctx context.Context, server co
 
 	ifaceID, ok := primaryInterfaceID(server)
 	if !ok {
-		return nil
+		diagnostics.AddWarning(
+			"Security Groups Unknown",
+			fmt.Sprintf("server %d reports no network interface, so its security groups could not be read", server.ID),
+		)
+		return diagnostics
 	}
 
 	list, err := c.serverService.NetworkInterfaces(server.ID).List(ctx, goclient.Cursor{NoFilter: 1})
@@ -417,10 +433,15 @@ func (c computeServerResource) readSecurityGroups(ctx context.Context, server co
 	for _, iface := range list.Items {
 		if iface.ID == ifaceID {
 			state.SecurityGroupIDs = securityGroupIDSet(iface)
-			break
+			return diagnostics
 		}
 	}
-	return nil
+
+	diagnostics.AddWarning(
+		"Security Groups Unknown",
+		fmt.Sprintf("network interface %d is not in the interface list of server %d, so its security groups could not be read", ifaceID, server.ID),
+	)
+	return diagnostics
 }
 
 const (

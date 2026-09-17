@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/flowswiss/terraform-provider-flow/validators"
@@ -54,11 +53,11 @@ func (c *computeSecurityGroupRuleResourceProtocol) FromNumber(number int) {
 }
 
 func (c computeSecurityGroupRuleResourceProtocol) ToNumber() int {
-	if !c.Number.IsNull() {
+	if !c.Number.IsNull() && !c.Number.IsUnknown() {
 		return int(c.Number.ValueInt64())
 	}
 
-	if !c.Name.IsNull() {
+	if !c.Name.IsNull() && !c.Name.IsUnknown() {
 		return protocolNamesToNumber[c.Name.ValueString()]
 	}
 
@@ -97,6 +96,7 @@ func (c *computeSecurityGroupRuleResourceData) FromEntity(securityGroupID int, r
 	c.Protocol = &computeSecurityGroupRuleResourceProtocol{}
 	c.Protocol.FromNumber(rule.Protocol)
 
+	c.PortRange = nil
 	if rule.Protocol == compute.ProtocolTCP || rule.Protocol == compute.ProtocolUDP {
 		c.PortRange = &computeSecurityGroupRuleResourcePortRange{
 			From: types.Int64Value(int64(rule.FromPort)),
@@ -104,6 +104,7 @@ func (c *computeSecurityGroupRuleResourceData) FromEntity(securityGroupID int, r
 		}
 	}
 
+	c.ICMP = nil
 	if rule.Protocol == compute.ProtocolICMP {
 		c.ICMP = &computeSecurityGroupRuleResourceICMP{
 			Type: types.Int64Value(int64(rule.ICMPType)),
@@ -148,21 +149,17 @@ func (c computeSecurityGroupRuleResource) Schema(ctx context.Context, request re
 			},
 			"protocol": schema.SingleNestedAttribute{
 				Attributes: map[string]schema.Attribute{
+					// no UseStateForUnknown: each is derived from the other, so pinning the old
+					// number while the name changes breaks the apply
 					"number": schema.Int64Attribute{
 						MarkdownDescription: "iana protocol number of the security group rule",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers: []planmodifier.Int64{
-							int64planmodifier.UseStateForUnknown(),
-						},
 					},
 					"name": schema.StringAttribute{
 						MarkdownDescription: "protocol name of the security group rule",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers: []planmodifier.String{
-							stringplanmodifier.UseStateForUnknown(),
-						},
 					},
 				},
 				MarkdownDescription: "protocol of the security group rule",

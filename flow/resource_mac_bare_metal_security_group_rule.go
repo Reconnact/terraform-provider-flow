@@ -94,6 +94,7 @@ func (r *macBareMetalSecurityGroupRuleResourceData) FromEntity(securityGroupID i
 	r.Protocol = &macBareMetalSecurityGroupRuleResourceProtocol{}
 	r.Protocol.FromNumber(rule.Protocol)
 
+	r.PortRange = nil
 	if rule.Protocol == macbaremetal.ProtocolTCP || rule.Protocol == macbaremetal.ProtocolUDP {
 		r.PortRange = &macBareMetalSecurityGroupRuleResourcePortRange{
 			From: types.Int64Value(int64(rule.FromPort)),
@@ -101,6 +102,7 @@ func (r *macBareMetalSecurityGroupRuleResourceData) FromEntity(securityGroupID i
 		}
 	}
 
+	r.ICMP = nil
 	if rule.Protocol == macbaremetal.ProtocolICMP {
 		r.ICMP = &macBareMetalSecurityGroupRuleResourceICMP{
 			Type: types.Int64Value(int64(rule.ICMPType)),
