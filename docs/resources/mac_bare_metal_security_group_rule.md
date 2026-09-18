@@ -3,12 +3,12 @@
 page_title: "flow_mac_bare_metal_security_group_rule Resource - terraform-provider-flow"
 subcategory: ""
 description: |-
-  
+  Import: terraform import flow_mac_bare_metal_security_group_rule.<name> <security_group_id>:<id>
 ---
 
 # flow_mac_bare_metal_security_group_rule (Resource)
 
-
+Import: `terraform import flow_mac_bare_metal_security_group_rule.<name> <security_group_id>:<id>`
 
 
 

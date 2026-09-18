@@ -6,16 +6,16 @@ import (
 
 	"github.com/flowswiss/goclient"
 	"github.com/flowswiss/goclient/macbaremetal"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/flowswiss/terraform-provider-flow/filter"
 )
 
 var (
-	_ tfsdk.DataSourceType = (*macBareMetalSecurityGroupDataSourceType)(nil)
-	_ tfsdk.DataSource     = (*macBareMetalSecurityGroupDataSource)(nil)
+	_ datasource.DataSource              = (*macBareMetalSecurityGroupDataSource)(nil)
+	_ datasource.DataSourceWithConfigure = (*macBareMetalSecurityGroupDataSource)(nil)
 )
 
 type macBareMetalSecurityGroupDataSourceData struct {
@@ -25,70 +25,71 @@ type macBareMetalSecurityGroupDataSourceData struct {
 }
 
 func (c *macBareMetalSecurityGroupDataSourceData) FromEntity(securityGroup macbaremetal.SecurityGroup) {
-	c.ID = types.Int64{Value: int64(securityGroup.ID)}
-	c.Name = types.String{Value: securityGroup.Name}
-	c.NetworkID = types.Int64{Value: int64(securityGroup.Network.ID)}
+	c.ID = types.Int64Value(int64(securityGroup.ID))
+	c.Name = types.StringValue(securityGroup.Name)
+	c.NetworkID = types.Int64Value(int64(securityGroup.Network.ID))
 }
 
 func (c macBareMetalSecurityGroupDataSourceData) AppliesTo(securityGroup macbaremetal.SecurityGroup) bool {
-	if !c.ID.Null && securityGroup.ID != int(c.ID.Value) {
+	if !c.ID.IsNull() && securityGroup.ID != int(c.ID.ValueInt64()) {
 		return false
 	}
 
-	if !c.Name.Null && securityGroup.Name != c.Name.Value {
+	if !c.Name.IsNull() && securityGroup.Name != c.Name.ValueString() {
 		return false
 	}
 
-	if !c.NetworkID.Null && securityGroup.Network.ID != int(c.NetworkID.Value) {
+	if !c.NetworkID.IsNull() && securityGroup.Network.ID != int(c.NetworkID.ValueInt64()) {
 		return false
 	}
 
 	return true
 }
 
-type macBareMetalSecurityGroupDataSourceType struct{}
-
-func (c macBareMetalSecurityGroupDataSourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (c macBareMetalSecurityGroupDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the security group",
 				Optional:            true,
 				Computed:            true,
 			},
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the security group",
 				Optional:            true,
 				Computed:            true,
 			},
-			"network_id": {
-				Type:                types.Int64Type,
+			"network_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the network",
 				Optional:            true,
 				Computed:            true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (c macBareMetalSecurityGroupDataSourceType) NewDataSource(ctx context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newMacBareMetalSecurityGroupDataSource() datasource.DataSource {
+	return &macBareMetalSecurityGroupDataSource{}
+}
+
+func (c *macBareMetalSecurityGroupDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_mac_bare_metal_security_group"
+}
+
+func (c *macBareMetalSecurityGroupDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return macBareMetalSecurityGroupDataSource{
-		securityGroupService: macbaremetal.NewSecurityGroupService(prov.client),
-	}, diagnostics
+	c.securityGroupService = macbaremetal.NewSecurityGroupService(client)
 }
 
 type macBareMetalSecurityGroupDataSource struct {
 	securityGroupService macbaremetal.SecurityGroupService
 }
 
-func (c macBareMetalSecurityGroupDataSource) Read(ctx context.Context, request tfsdk.ReadDataSourceRequest, response *tfsdk.ReadDataSourceResponse) {
+func (c macBareMetalSecurityGroupDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var config macBareMetalSecurityGroupDataSourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)

@@ -6,16 +6,19 @@ import (
 
 	"github.com/flowswiss/goclient/common"
 	"github.com/flowswiss/goclient/macbaremetal"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ tfsdk.ResourceType            = (*macBareMetalDeviceResourceType)(nil)
-	_ tfsdk.Resource                = (*macBareMetalDeviceResource)(nil)
-	_ tfsdk.ResourceWithImportState = (*macBareMetalDeviceResource)(nil)
+	_ resource.Resource                = (*macBareMetalDeviceResource)(nil)
+	_ resource.ResourceWithConfigure   = (*macBareMetalDeviceResource)(nil)
+	_ resource.ResourceWithImportState = (*macBareMetalDeviceResource)(nil)
 )
 
 type macBareMetalDeviceResourceData struct {
@@ -26,94 +29,99 @@ type macBareMetalDeviceResourceData struct {
 	NetworkID          types.Int64  `tfsdk:"network_id"`
 	NetworkInterfaceID types.Int64  `tfsdk:"network_interface_id"`
 	Password           types.String `tfsdk:"password"`
+
+	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (m *macBareMetalDeviceResourceData) FromEntity(device macbaremetal.Device) {
-	m.ID = types.Int64{Value: int64(device.ID)}
-	m.Name = types.String{Value: device.Name}
-	m.LocationID = types.Int64{Value: int64(device.Location.ID)}
-	m.ProductID = types.Int64{Value: int64(device.Product.ID)}
-	m.NetworkID = types.Int64{Value: int64(device.Network.ID)}
+	m.ID = types.Int64Value(int64(device.ID))
+	m.Name = types.StringValue(device.Name)
+	m.LocationID = types.Int64Value(int64(device.Location.ID))
+	m.ProductID = types.Int64Value(int64(device.Product.ID))
+	m.NetworkID = types.Int64Value(int64(device.Network.ID))
 
 	if len(device.NetworkInterfaces) > 0 {
-		m.NetworkInterfaceID = types.Int64{Value: int64(device.NetworkInterfaces[0].ID)}
+		m.NetworkInterfaceID = types.Int64Value(int64(device.NetworkInterfaces[0].ID))
 	}
 }
 
-type macBareMetalDeviceResourceType struct{}
-
-func (m macBareMetalDeviceResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (m macBareMetalDeviceResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the device",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"name": {
-				Type:                types.StringType,
+			"name": schema.StringAttribute{
 				MarkdownDescription: "name of the device",
 				Required:            true,
 			},
-			"location_id": {
-				Type:                types.Int64Type,
+			"location_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the location",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"network_id": {
-				Type:                types.Int64Type,
+			"network_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the network",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"network_interface_id": {
-				Type:                types.Int64Type,
+			"network_interface_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the network interface",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"product_id": {
-				Type:                types.Int64Type,
+			"product_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the product",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"password": {
-				Type:                types.StringType,
-				MarkdownDescription: "password of the device",
+			"password": schema.StringAttribute{
+				MarkdownDescription: "password of the device; editing it produces no plan, rotate with `terraform apply -replace=`",
 				Required:            true,
 				Sensitive:           true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
-				},
+				WriteOnly:           true,
 			},
 		},
-	}, nil
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{
+				Create:            true,
+				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait is bounded at 10m"),
+				Delete:            true,
+				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the device is given 10m to disappear"),
+			}),
+		},
+	}
 }
 
-func (m macBareMetalDeviceResourceType) NewResource(ctx context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newMacBareMetalDeviceResource() resource.Resource {
+	return &macBareMetalDeviceResource{}
+}
+
+func (m *macBareMetalDeviceResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_mac_bare_metal_device"
+}
+
+func (m *macBareMetalDeviceResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return macBareMetalDeviceResource{
-		orderService:  common.NewOrderService(prov.client),
-		deviceService: macbaremetal.NewDeviceService(prov.client),
-	}, diagnostics
+	m.orderService = common.NewOrderService(client)
+	m.deviceService = macbaremetal.NewDeviceService(client)
 }
 
 type macBareMetalDeviceResource struct {
@@ -121,7 +129,7 @@ type macBareMetalDeviceResource struct {
 	deviceService macbaremetal.DeviceService
 }
 
-func (m macBareMetalDeviceResource) Create(ctx context.Context, request tfsdk.CreateResourceRequest, response *tfsdk.CreateResourceResponse) {
+func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var config macBareMetalDeviceResourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
@@ -129,22 +137,29 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request tfsdk.Cr
 		return
 	}
 
+	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
+	defer cancel()
+
 	create := macbaremetal.DeviceCreate{
-		Name:            config.Name.Value,
-		LocationID:      int(config.LocationID.Value),
-		ProductID:       int(config.ProductID.Value),
-		NetworkID:       int(config.NetworkID.Value),
+		Name:            config.Name.ValueString(),
+		LocationID:      int(config.LocationID.ValueInt64()),
+		ProductID:       int(config.ProductID.ValueInt64()),
+		NetworkID:       int(config.NetworkID.ValueInt64()),
 		AttachElasticIP: false,
-		Password:        config.Password.Value,
+		Password:        config.Password.ValueString(),
 	}
 
-	ordering, err := m.deviceService.Create(ctx, create)
+	var ordering common.Ordering
+	err := retryCreate(ctx, "create device", func() (err error) {
+		ordering, err = m.deviceService.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create device: %s", err))
 		return
 	}
 
-	order, err := m.orderService.WaitUntilProcessed(ctx, ordering)
+	order, err := waitForOrder(ctx, m.orderService, ordering)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for device creation: %s", err))
 		return
@@ -152,20 +167,21 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request tfsdk.Cr
 
 	device, err := m.deviceService.Get(ctx, order.Product.ID)
 	if err != nil {
+		// the order went through, so the device exists and is billed — keep its id
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get device: %s", err))
-		return
+		device = macbaremetal.Device{ID: order.Product.ID}
 	}
 
 	var state macBareMetalDeviceResourceData
 	state.FromEntity(device)
 
-	state.Password = config.Password
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (m macBareMetalDeviceResource) Read(ctx context.Context, request tfsdk.ReadResourceRequest, response *tfsdk.ReadResourceResponse) {
+func (m macBareMetalDeviceResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state macBareMetalDeviceResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -173,8 +189,12 @@ func (m macBareMetalDeviceResource) Read(ctx context.Context, request tfsdk.Read
 		return
 	}
 
-	device, err := m.deviceService.Get(ctx, int(state.ID.Value))
+	device, err := m.deviceService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("device %d", state.ID.ValueInt64()))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get device: %s", err))
 		return
 	}
@@ -185,7 +205,7 @@ func (m macBareMetalDeviceResource) Read(ctx context.Context, request tfsdk.Read
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (m macBareMetalDeviceResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {
+func (m macBareMetalDeviceResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var state macBareMetalDeviceResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -201,22 +221,27 @@ func (m macBareMetalDeviceResource) Update(ctx context.Context, request tfsdk.Up
 	}
 
 	update := macbaremetal.DeviceUpdate{
-		Name: config.Name.Value,
+		Name: config.Name.ValueString(),
 	}
 
-	device, err := m.deviceService.Update(ctx, int(state.ID.Value), update)
+	var device macbaremetal.Device
+	err := retry(ctx, "update device", func() (err error) {
+		device, err = m.deviceService.Update(ctx, int(state.ID.ValueInt64()), update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update device: %s", err))
 		return
 	}
 
 	state.FromEntity(device)
+	state.Timeouts = config.Timeouts
 
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (m macBareMetalDeviceResource) Delete(ctx context.Context, request tfsdk.DeleteResourceRequest, response *tfsdk.DeleteResourceResponse) {
+func (m macBareMetalDeviceResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state macBareMetalDeviceResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -224,13 +249,29 @@ func (m macBareMetalDeviceResource) Delete(ctx context.Context, request tfsdk.De
 		return
 	}
 
-	err := m.deviceService.Delete(ctx, int(state.ID.Value))
+	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
+	defer cancel()
+
+	deviceID := int(state.ID.ValueInt64())
+
+	err := retryDelete(ctx, "delete device", func() error {
+		return m.deviceService.Delete(ctx, deviceID)
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete device: %s", err))
 		return
 	}
+
+	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("device %d", deviceID), func(ctx context.Context) error {
+		_, err := m.deviceService.Get(ctx, deviceID)
+		return err
+	})
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for device deletion: %s", err))
+		return
+	}
 }
 
-func (m macBareMetalDeviceResource) ImportState(ctx context.Context, request tfsdk.ImportResourceStateRequest, response *tfsdk.ImportResourceStateResponse) {
+func (m macBareMetalDeviceResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }

@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccMacBareMetalNetwork_Basic(t *testing.T) {
-	t.Skip("api does currently not allow creating multiple mac bare metal networks. enable this once it is allowed")
+	t.Skip("dev mocks the mac bare metal backend")
 
 	networkName := acctest.RandomWithPrefix("test-network")
 	domainName := "example.com"
 	domainNameServer := "1.1.2.2"
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
