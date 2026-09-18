@@ -3,13 +3,13 @@
 page_title: "flow_compute_elastic_ip_load_balancer_attachment Resource - terraform-provider-flow"
 subcategory: ""
 description: |-
-  Attaches an elastic ip to a load balancer. A load balancer takes at most one, and the network it sits in has to be behind a public router. Use this or flow_compute_load_balancer.public, not both: public also asks for an ip, and the api refuses a second one.
+  Attaches an elastic ip to a load balancer. A load balancer takes at most one, and the network it sits in has to be behind a public router.
   Import: terraform import flow_compute_elastic_ip_load_balancer_attachment.<name> <load_balancer_id>:<elastic_ip_id>
 ---
 
 # flow_compute_elastic_ip_load_balancer_attachment (Resource)
 
-Attaches an elastic ip to a load balancer. A load balancer takes at most one, and the network it sits in has to be behind a public router. Use this or `flow_compute_load_balancer.public`, not both: `public` also asks for an ip, and the api refuses a second one.
+Attaches an elastic ip to a load balancer. A load balancer takes at most one, and the network it sits in has to be behind a public router.
 
 Import: `terraform import flow_compute_elastic_ip_load_balancer_attachment.<name> <load_balancer_id>:<elastic_ip_id>`
 

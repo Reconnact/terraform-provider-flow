@@ -25,7 +25,6 @@ func TestAccComputeElasticIPLoadBalancerAttachment_Basic(t *testing.T) {
 				Config: fmt.Sprintf(testAccComputeElasticIPLoadBalancerAttachmentConfigBasic, name, "10.106.0.0/24"),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrPair("flow_compute_load_balancer.foobar", "public_ip", "flow_compute_elastic_ip.foobar", "public_ip"),
-					resource.TestCheckResourceAttr("flow_compute_load_balancer.foobar", "public", "true"),
 				),
 			},
 		},

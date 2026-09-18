@@ -40,7 +40,7 @@ func (c *computeElasticIPLoadBalancerAttachmentResourceData) FromEntity(loadBala
 
 func (c computeElasticIPLoadBalancerAttachmentResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
 	response.Schema = schema.Schema{
-		MarkdownDescription: "Attaches an elastic ip to a load balancer. A load balancer takes at most one, and the network it sits in has to be behind a public router. Use this or `flow_compute_load_balancer.public`, not both: `public` also asks for an ip, and the api refuses a second one.\n\nImport: `terraform import flow_compute_elastic_ip_load_balancer_attachment.<name> <load_balancer_id>:<elastic_ip_id>`",
+		MarkdownDescription: "Attaches an elastic ip to a load balancer. A load balancer takes at most one, and the network it sits in has to be behind a public router.\n\nImport: `terraform import flow_compute_elastic_ip_load_balancer_attachment.<name> <load_balancer_id>:<elastic_ip_id>`",
 		Attributes: map[string]schema.Attribute{
 			"load_balancer_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the load balancer to attach the elastic ip to",
