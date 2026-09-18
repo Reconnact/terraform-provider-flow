@@ -3,39 +3,30 @@
 ## Unreleased (planned as v1.1.3)
 
 ### Behaviour changes
-- `flow_compute_server.product_id` resizes the server in place (stop, resize, start — about a minute
-  of downtime) instead of replacing it.
-- `flow_compute_volume_attachment.volume_id` replaces the attachment (detach, attach).
-- `flow_compute_network_interface.security_group_ids` is a set instead of a list; existing configs
-  and states keep working.
-- `flow_compute_volume.name` is required — the api refuses a create without one, so the error moves
-  from a failed apply to the plan.
+- `flow_compute_server.product_id` resizes the server in place. About a minute of downtime.
+- `flow_compute_volume_attachment.volume_id` replaces the attachment.
+- `flow_compute_network_interface.security_group_ids` is a set, not a list. Existing configs keep
+  working.
+- `flow_compute_volume.name` is required.
 
 ### Reliability
-- Mutating API calls are retried with a bounded backoff instead of failing on the first transient
-  error (new provider attribute `retry_timeout`, default `90s`, `0` disables); reads are retried on
-  gateway errors.
-- The provider waits until resources are actually usable — servers running, volumes settled, load
-  balancers mutable, clusters ready or gone — with a deadline and a clear error on every wait.
-- A create that fails halfway leaves a tainted resource instead of an untracked one, and objects
-  deleted outside Terraform are dropped from the state and recreated instead of failing every plan.
-- A 404 counts as success only for deletes and detaches; on updates the api's error surfaces —
-  the api answers 404 for missing sub-entities too (e.g. an unknown cluster version), which was
-  silently mistaken for success before.
+- Failed api calls are retried. New provider attribute `retry_timeout`: default `90s`, `0` turns it
+  off.
+- The provider waits until a resource is really usable.
+- A create that fails halfway leaves a tainted resource.
+- A resource deleted outside Terraform is dropped from the state and created again.
+- A 404 only counts as success on a delete or a detach.
 
 ### Fixes and additions
-- Kubernetes clusters can be updated without pinning `version_id`, and a version change keeps the
-  cluster's configuration variables.
-- Renames no longer rebuild dependent resources such as routes, pool members and elastic-IP
-  attachments.
-- `key_pair_id` and `network_id` may be omitted; the values the api assigns are adopted cleanly.
-- `flow_compute_server` exposes `network_interface_id` and `security_group_ids`: security groups on
-  the server's own interface, and elastic-IP attachments without a data-source lookup.
-- Every resource can be imported; resources that live under a parent use composite ids such as
-  `server_id:id` (the format is in each resource's documentation). Key pairs and certificates carry
-  attributes the api never returns (`public_key`, `certificate`, `private_key`), so the plan after
-  their import wants a replace — and a replaced key pair rebuilds the servers referencing it; add
-  `lifecycle { ignore_changes = [public_key] }` (or `certificate`, `private_key`) to adopt them.
+- A kubernetes cluster can be updated without setting `version_id`.
+- A version change keeps the cluster's configuration variables.
+- A rename no longer rebuilds dependent resources.
+- `key_pair_id` and `network_id` can be left out.
+- `network_interface_id` and `security_group_ids` on `flow_compute_server`.
+- Every resource except `flow_mac_bare_metal_security_group_rule` can be imported. A resource under
+  a parent uses an id like `server_id:id`.
+- Importing a key pair or a certificate plans a replace. Add
+  `lifecycle { ignore_changes = [public_key] }` (or `certificate`, `private_key`) to avoid it.
 
 ## v1.1.2 - 2026-08-17
 - Fixed `terraform import` for every importable resource: all ids are numeric, but the import wrote
