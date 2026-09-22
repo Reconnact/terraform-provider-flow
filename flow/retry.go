@@ -31,7 +31,6 @@ type retryPolicy struct {
 	MaxDelay     time.Duration
 }
 
-// Shared by all resources; Configure sets Timeout from the provider config.
 var defaultRetryPolicy = retryPolicy{
 	Timeout:      defaultRetryTimeout,
 	InitialDelay: defaultRetryInitialDelay,
@@ -46,20 +45,14 @@ const (
 	opDelete
 )
 
-// retry runs fn until it succeeds or the budget is exhausted and returns the
-// last error unchanged. A 404 stops with the error.
 func retry(ctx context.Context, what string, fn func() error) error {
 	return retryWith(ctx, defaultRetryPolicy, opMutate, what, fn)
 }
 
-// retryCreate is retry for calls that create objects: a transport failure is
-// not retried because a duplicate could be created.
 func retryCreate(ctx context.Context, what string, fn func() error) error {
 	return retryWith(ctx, defaultRetryPolicy, opCreate, what, fn)
 }
 
-// retryDelete is retry for calls that remove objects (deletes, detaches):
-// a 404 means the object is already gone and counts as success.
 func retryDelete(ctx context.Context, what string, fn func() error) error {
 	return retryWith(ctx, defaultRetryPolicy, opDelete, what, fn)
 }
@@ -152,9 +145,6 @@ func classifyRetry(err error, op retryOperation) retryDecision {
 	return retryAgain
 }
 
-// goclient wraps failures without a response as "do request: ..." and
-// unparseable error bodies as "parse response body: ..."; only the latter
-// means the API actually answered.
 func isTransportError(err error) bool {
 	for e := err; e != nil; e = errors.Unwrap(e) {
 		if strings.HasPrefix(e.Error(), "parse response body") {
@@ -176,8 +166,6 @@ func jitter(d time.Duration) time.Duration {
 	return d + time.Duration(rand.Int63n(int64(d)/4+1))
 }
 
-// reads are retried underneath goclient, on the transport: a gateway 502 or a
-// dropped connection during a refresh would otherwise fail the whole run
 type readRetryTransport struct {
 	base http.RoundTripper
 }
@@ -203,7 +191,6 @@ func (t readRetryTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 		elapsed := time.Since(start)
 		if elapsed+delay > policy.Timeout {
-			// the last answer goes back unchanged — goclient turns it into its usual error
 			return res, err
 		}
 
@@ -212,7 +199,6 @@ func (t readRetryTransport) RoundTrip(req *http.Request) (*http.Response, error)
 			reason = err.Error()
 		} else {
 			reason = res.Status
-			// drained so the connection can be reused for the next attempt
 			_, _ = io.Copy(io.Discard, res.Body)
 			_ = res.Body.Close()
 		}

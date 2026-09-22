@@ -204,8 +204,6 @@ func (c computeServerResource) Create(ctx context.Context, request resource.Crea
 		return
 	}
 
-	// write-only values only ever arrive in the config — the framework nulls them
-	// in the plan, which is where every other attribute here comes from
 	var password, cloudInit types.String
 	response.Diagnostics.Append(request.Config.GetAttribute(ctx, path.Root("password"), &password)...)
 	response.Diagnostics.Append(request.Config.GetAttribute(ctx, path.Root("cloud_init"), &cloudInit)...)
@@ -248,7 +246,6 @@ func (c computeServerResource) Create(ctx context.Context, request resource.Crea
 	server, err := c.waitForServerStatus(ctx, order.Product.ID, compute.ServerStatusRunning, "running")
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for server to be running: %s", err))
-		// the order went through, so the server exists and is billed — keep its id
 		if server.ID == 0 {
 			server.ID = order.Product.ID
 		}
@@ -340,7 +337,6 @@ func (c computeServerResource) Update(ctx context.Context, request resource.Upda
 		}
 	}
 
-	// the update and action responses leave the networks out
 	if fresh, err := c.serverService.Get(ctx, int(state.ID.ValueInt64())); err != nil {
 		response.Diagnostics.AddWarning(
 			"Incomplete Read",
@@ -466,8 +462,6 @@ const (
 	serverActionStop  = "stop"
 )
 
-// the api resizes only a stopped server: stop, upgrade (an order), start —
-// a server the user keeps stopped stays stopped
 func (c computeServerResource) resize(ctx context.Context, server compute.Server, productID int) (compute.Server, error) {
 	wasStopped := server.Status.ID == compute.ServerStatusStopped
 	if !wasStopped {
@@ -498,8 +492,6 @@ func (c computeServerResource) resize(ctx context.Context, server compute.Server
 		return c.serverService.Get(ctx, server.ID)
 	}
 
-	// started again even after a failed upgrade — a resize must not leave a
-	// stopped server behind
 	if startErr := c.perform(ctx, server.ID, serverActionStart); startErr != nil && err == nil {
 		err = startErr
 	}

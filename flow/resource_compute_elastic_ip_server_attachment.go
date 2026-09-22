@@ -134,7 +134,6 @@ func (c computeElasticIPServerAttachmentResource) Create(ctx context.Context, re
 	var state computeElasticIPServerAttachmentResourceData
 	state.FromEntity(server, elasticIP)
 
-	// the api does not report the ip on the interface right after the attach
 	state.NetworkInterfaceID = config.NetworkInterfaceID
 
 	diagnostics = response.State.Set(ctx, state)

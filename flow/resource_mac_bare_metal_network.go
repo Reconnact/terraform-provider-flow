@@ -174,8 +174,6 @@ func (r macBareMetalNetworkResource) Create(ctx context.Context, request resourc
 		return
 	}
 
-	// the api does not allow to set these properties on creation,
-	// so we need to set afterwards using an update.
 	if len(config.DomainNameServers) != 0 || !config.DomainName.IsNull() {
 		update := macbaremetal.NetworkUpdate{
 			DomainName:        config.DomainName.ValueString(),
@@ -188,7 +186,6 @@ func (r macBareMetalNetworkResource) Create(ctx context.Context, request resourc
 
 		updated, err := retryUpdate(ctx, network.ID, update, r.networkService)
 		if err != nil {
-			// the network exists — returning here would orphan it
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update network: %s", err))
 		} else {
 			network = updated

@@ -100,7 +100,6 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request res
 		return
 	}
 
-	// volume is already attached to the requested server -> requested state is already present
 	if volume.AttachedTo.ID == int(config.ServerID.ValueInt64()) {
 		var state computeVolumeAttachmentResourceData
 		state.FromEntity(volume)
@@ -111,13 +110,11 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request res
 		return
 	}
 
-	// volume is already attached to a different server
 	if volume.AttachedTo.ID != 0 {
 		response.Diagnostics.AddError("Volume Already Attached", "volume is already attached to a different server")
 		return
 	}
 
-	// volume is not attached to any server yet -> attach it
 	attach := compute.VolumeAttach{
 		InstanceID: int(config.ServerID.ValueInt64()),
 	}
@@ -191,8 +188,6 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request res
 		return
 	}
 
-	// the timeouts block is the only other thing an update can carry — moving
-	// the volume for it would detach a live disk for nothing
 	if plan.ServerID.Equal(state.ServerID) {
 		state.Timeouts = plan.Timeouts
 
@@ -204,7 +199,6 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request res
 	ctx, cancel := withTimeout(ctx, plan.Timeouts.Update, &response.Diagnostics)
 	defer cancel()
 
-	// detach the volume from the current server
 	err := retryDelete(ctx, "detach volume", func() error {
 		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.ValueInt64()), int(state.ServerID.ValueInt64()))
 	})
@@ -220,7 +214,6 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request res
 
 	tflog.Trace(ctx, "volume attachment: volume detached from previous server")
 
-	// attach the volume to the new server
 	attach := compute.VolumeAttach{
 		InstanceID: int(plan.ServerID.ValueInt64()),
 	}
@@ -277,13 +270,10 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request res
 	}
 }
 
-// the backend waits only on the detach side, and only for 30 seconds; until the
-// volume settles, follow-up attach/expand/delete calls are refused
 func (r computeVolumeAttachmentResource) waitForVolumeStatus(ctx context.Context, status string, volumeID, wantStatus int) (volume compute.Volume, err error) {
 	err = waitFor(ctx, volumeSettleTimeout, defaultWaitInterval, fmt.Sprintf("volume %d to be %s", volumeID, status), func(ctx context.Context) (bool, error) {
 		got, err := compute.NewVolumeService(r.client).Get(ctx, volumeID)
 		if err != nil {
-			// a volume that is gone counts as detached
 			if wantStatus == compute.VolumeStatusAvailable && isNotFound(err) {
 				return true, nil
 			}

@@ -41,8 +41,6 @@ func withTimeout(ctx context.Context, get timeoutGetter, diagnostics *diag.Diagn
 	return context.WithTimeout(ctx, timeout)
 }
 
-// the generated docs give a `timeouts {}` value nothing but the duration format —
-// say what the operation waits for and what bounds it when the value is unset
 func timeoutDescription(what string) string {
 	return what + `; a string that can be ` +
 		`[parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"`

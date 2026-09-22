@@ -53,9 +53,6 @@ func TestAccComputeSecurityGroupRule_Basic(t *testing.T) {
 	})
 }
 
-// Code 0 is every ordinary ping rule, and the api rejects an icmp rule that carries only one of
-// the two fields — so a dropped 0 was a 400, not a silently wider rule. Echo request is the
-// create, echo reply the update: both send a zero, from a different code path.
 func TestAccComputeSecurityGroupRule_ICMP(t *testing.T) {
 	securityGroupName := acctest.RandomWithPrefix("test-security-group")
 

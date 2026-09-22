@@ -135,7 +135,6 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Create(ctx context.Contex
 	var state macBareMetalElasticIPDeviceAttachmentResourceData
 	state.FromEntity(device, elasticIP)
 
-	// the api does not report the ip on the interface right after the attach
 	state.NetworkInterfaceID = config.NetworkInterfaceID
 
 	diagnostics = response.State.Set(ctx, state)

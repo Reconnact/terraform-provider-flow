@@ -64,7 +64,7 @@ jobs:
     needs: build
     if: ${{ needs.build.outputs.acceptance_configured == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     concurrency:
       group: acceptance-tests-${{ github.repository }}
       cancel-in-progress: false
@@ -89,9 +89,9 @@ jobs:
           terraform_wrapper: false
       - run: go mod download
       - name: acceptance tests
-        timeout-minutes: 40
+        timeout-minutes: 70
         env:
           TF_ACC: "1"
           FLOW_TOKEN: ${{ secrets.FLOW_TOKEN }}
           FLOW_ENDPOINT: ${{ vars.FLOW_ENDPOINT }}
-        run: go test -v -cover -count=1 -timeout 30m ./...
+        run: go test -v -cover -count=1 -timeout 60m ./...

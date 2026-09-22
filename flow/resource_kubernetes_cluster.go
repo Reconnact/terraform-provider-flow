@@ -417,8 +417,6 @@ func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService,
 	return cluster, err
 }
 
-// configuration and flavor updates run as an async action that keeps the
-// cluster locked after the call returns — any update in that window is refused
 func (k kubernetesClusterResource) waitForClusterUnlocked(ctx context.Context, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be unlocked", clusterID), func(ctx context.Context) (bool, error) {
 		got, err := k.clusterService.Get(ctx, clusterID)
@@ -432,8 +430,6 @@ func (k kubernetesClusterResource) waitForClusterUnlocked(ctx context.Context, c
 	return cluster, err
 }
 
-// cluster deletion is queued — the delete call returns while the cluster still
-// exists, and deleting the network is refused until it is gone
 func (k kubernetesClusterResource) waitForClusterGone(ctx context.Context, clusterID int) error {
 	return waitForGone(ctx, clusterWaitTimeout, fmt.Sprintf("cluster %d", clusterID), func(ctx context.Context) error {
 		_, err := k.clusterService.Get(ctx, clusterID)

@@ -22,6 +22,7 @@ Most of these come from the api, not from the provider.
 | What | What to do |
 |---|---|
 | `version_id` on `flow_kubernetes_cluster` cannot be set at create | create the `flow_kubernetes_cluster` first, set `version_id` in a later apply |
+| the configuration variables of a `flow_kubernetes_cluster` are not managed. a change of `version_id` sends the current variables along, and the apply fails when they do not fit the target version's schema | adjust the variables in the portal first, or change the version there, then apply again |
 | the nodes, volumes and load balancers of a `flow_kubernetes_cluster` are read-only: `flow_kubernetes_node`, `flow_kubernetes_volume` and `flow_kubernetes_load_balancer` are data sources | manage them inside the cluster or in the portal |
 
 ## Mac bare metal

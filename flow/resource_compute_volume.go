@@ -166,8 +166,6 @@ func (r computeVolumeResource) Create(ctx context.Context, request resource.Crea
 	var state computeVolumeResourceData
 	state.FromEntity(volume)
 
-	// copy the restored snapshot property from the config. in the api we don't know anymore if there was a snapshot
-	// that has been restored.
 	state.Snapshot = config.Snapshot
 	state.Timeouts = config.Timeouts
 
@@ -264,7 +262,6 @@ func (r computeVolumeResource) Update(ctx context.Context, request resource.Upda
 			return
 		}
 
-		// the expand went through, so its response is kept when the wait fails
 		settled, waitErr := r.waitForVolumeSettled(ctx, int(state.ID.ValueInt64()), volumeSettleTimeout)
 		if settled.ID != 0 {
 			volume = settled
@@ -316,8 +313,6 @@ func (r computeVolumeResource) ImportState(ctx context.Context, request resource
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-// a restore or an expand leaves the volume in the working state while the
-// job is finished — follow-up calls are refused until then
 func (r computeVolumeResource) waitForVolumeSettled(ctx context.Context, volumeID int, timeout time.Duration) (volume compute.Volume, err error) {
 	err = waitFor(ctx, timeout, defaultWaitInterval, fmt.Sprintf("volume %d to settle", volumeID), func(ctx context.Context) (bool, error) {
 		got, err := r.volumeService.Get(ctx, volumeID)

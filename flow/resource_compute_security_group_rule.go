@@ -149,8 +149,6 @@ func (c computeSecurityGroupRuleResource) Schema(ctx context.Context, request re
 			},
 			"protocol": schema.SingleNestedAttribute{
 				Attributes: map[string]schema.Attribute{
-					// no UseStateForUnknown: each is derived from the other, so pinning the old
-					// number while the name changes breaks the apply
 					"number": schema.Int64Attribute{
 						MarkdownDescription: "iana protocol number of the security group rule",
 						Optional:            true,

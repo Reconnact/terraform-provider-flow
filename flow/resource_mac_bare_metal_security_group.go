@@ -147,7 +147,6 @@ func (r macBareMetalSecurityGroupResource) Update(ctx context.Context, request r
 		return
 	}
 
-	// the api replaces both fields on every update: a missing description clears it
 	current, err := r.securityGroupService.Get(ctx, int(state.ID.ValueInt64()))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get security group: %s", err))

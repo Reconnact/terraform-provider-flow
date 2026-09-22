@@ -258,8 +258,6 @@ func (r computeSnapshotResource) ImportState(ctx context.Context, request resour
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-// the snapshot stays in the creating state while the data is copied —
-// restoring or deleting it in that window is refused
 func (r computeSnapshotResource) waitForSnapshotAvailable(ctx context.Context, snapshotID int) (snapshot compute.Snapshot, err error) {
 	err = waitFor(ctx, snapshotTimeout, defaultWaitInterval, fmt.Sprintf("snapshot %d to be available", snapshotID), func(ctx context.Context) (bool, error) {
 		got, err := r.snapshotService.Get(ctx, snapshotID)
