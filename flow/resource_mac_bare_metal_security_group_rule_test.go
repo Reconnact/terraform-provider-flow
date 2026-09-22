@@ -10,8 +10,6 @@ import (
 )
 
 func TestAccMacBareMetalSecurityGroupRule_Basic(t *testing.T) {
-	t.Skip("dev mocks the mac bare metal backend")
-
 	securityGroupName := acctest.RandomWithPrefix("test-security-group")
 
 	protocolNumber := "6"

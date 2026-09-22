@@ -9,8 +9,6 @@ import (
 )
 
 func TestAccMacBareMetalSecurityGroup_Basic(t *testing.T) {
-	t.Skip("dev mocks the mac bare metal backend")
-
 	securityGroupName := acctest.RandomWithPrefix("test-security-group")
 
 	testAccSequential(t, resource.TestCase{

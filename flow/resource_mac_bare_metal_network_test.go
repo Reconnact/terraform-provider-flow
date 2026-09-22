@@ -9,8 +9,6 @@ import (
 )
 
 func TestAccMacBareMetalNetwork_Basic(t *testing.T) {
-	t.Skip("dev mocks the mac bare metal backend")
-
 	networkName := acctest.RandomWithPrefix("test-network")
 	domainName := "example.com"
 	domainNameServer := "1.1.2.2"
