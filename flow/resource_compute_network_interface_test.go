@@ -29,7 +29,6 @@ func TestAccComputeNetworkInterface_Basic(t *testing.T) {
 	})
 }
 
-// a second network, so the interface under test is not the primary one the server brings along
 const testAccComputeNetworkInterfaceConfigBasic = `
 resource "flow_compute_network" "back" {
 	name        = "%s-back"

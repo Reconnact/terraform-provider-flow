@@ -57,7 +57,6 @@ func TestImportStatePassthroughInt64ID_NonNumeric(t *testing.T) {
 	}
 }
 
-// Documents the pre-existing bug: the upstream helper writes a string into an Int64 attribute.
 func TestUpstreamPassthroughFailsOnInt64(t *testing.T) {
 	ctx := context.Background()
 	resp := newImportResponse(t)

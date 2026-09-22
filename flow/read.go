@@ -15,7 +15,6 @@ func isNotFound(err error) bool {
 	return statusCode(err) == http.StatusNotFound
 }
 
-// removeGone drops the resource from the state
 func removeGone(ctx context.Context, response *resource.ReadResponse, what string) {
 	tflog.Debug(ctx, "object gone, removing from state", map[string]interface{}{"object": what})
 	response.State.RemoveResource(ctx)

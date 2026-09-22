@@ -15,11 +15,9 @@ import (
 )
 
 // Every mutating API call is retried with a bounded backoff, regardless of the
-// error message. Not retried: 401/403, 404 (success on a delete, an error on
-// everything else — the api answers 404 for missing sub-entities too, e.g. an
-// unknown cluster version), context cancellation, and transport failures on a
-// create.
-// The budget is short so that real mistakes still surface quickly; it is configurable via the provider's `retry_timeout`.
+// error message. Not retried: 401/403, 404 (success on a delete, an error on everything else),
+// context cancellation, and transport failures on a create.
+// The budget is configurable via the provider's `retry_timeout`.
 
 const (
 	defaultRetryTimeout      = 90 * time.Second

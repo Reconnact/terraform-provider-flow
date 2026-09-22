@@ -99,8 +99,6 @@ func (m macBareMetalDeviceResource) Schema(ctx context.Context, request resource
 			"timeouts": timeouts.Block(ctx, timeouts.Opts{
 				Create:            true,
 				CreateDescription: timeoutDescription("bounds the whole create; unset, the order wait is bounded at 10m"),
-				Delete:            true,
-				DeleteDescription: timeoutDescription("bounds the whole delete; unset, the device is given 10m to disappear"),
 			}),
 		},
 	}
@@ -249,25 +247,13 @@ func (m macBareMetalDeviceResource) Delete(ctx context.Context, request resource
 		return
 	}
 
-	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
-	defer cancel()
-
 	deviceID := int(state.ID.ValueInt64())
 
-	err := retryDelete(ctx, "delete device", func() error {
-		return m.deviceService.Delete(ctx, deviceID)
-	})
-	if err != nil {
+	// a delete only ends the device's commitment, the device itself stays until
+	// the period expires. the api's answer is final: nothing to retry or wait for
+	err := m.deviceService.Delete(ctx, deviceID)
+	if err != nil && !isNotFound(err) {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete device: %s", err))
-		return
-	}
-
-	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("device %d", deviceID), func(ctx context.Context) error {
-		_, err := m.deviceService.Get(ctx, deviceID)
-		return err
-	})
-	if err != nil {
-		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for device deletion: %s", err))
 		return
 	}
 }

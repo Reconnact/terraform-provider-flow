@@ -271,8 +271,6 @@ func (c computeLoadBalancerResource) ImportState(ctx context.Context, request re
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-// the api refuses every change to a load balancer, its pools and members while
-// the status is working — poll until it settles
 func waitForLoadBalancerMutable(ctx context.Context, service compute.LoadBalancerService, loadBalancerID int) (loadBalancer compute.LoadBalancer, err error) {
 	err = waitFor(ctx, loadBalancerTimeout, defaultWaitInterval, fmt.Sprintf("load balancer %d to be mutable", loadBalancerID), func(ctx context.Context) (bool, error) {
 		got, err := service.Get(ctx, loadBalancerID)

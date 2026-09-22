@@ -39,9 +39,6 @@ func TestAccComputeRouter_Basic(t *testing.T) {
 	})
 }
 
-// Only the update proves that false reaches the api — a create with public = false sends the
-// field either way. The plan check holds the step to an update: a RequiresReplace on public
-// would turn it back into a create and hide the bug again.
 func TestAccComputeRouter_PublicOff(t *testing.T) {
 	routerName := acctest.RandomWithPrefix("test-router")
 

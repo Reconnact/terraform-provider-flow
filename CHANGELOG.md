@@ -14,6 +14,7 @@
 - `public_ip` on `flow_compute_load_balancer`.
 - `flow_compute_elastic_ip_load_balancer_attachment` attaches your own elastic ip to a load balancer.
 - `flow_mac_bare_metal_security_group_rule` can be imported.
+- `flow_kubernetes_node`, `flow_kubernetes_volume` and `flow_kubernetes_load_balancer` data sources introduced
 
 ### Fixes
 - A resource the api created stays in the state when a later step fails.

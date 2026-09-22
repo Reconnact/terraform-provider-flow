@@ -36,9 +36,6 @@ func TestAccComputeLoadBalancerPool_Basic(t *testing.T) {
 				),
 			},
 			{
-				// only sticky_session differs from the step above, so the update carries
-				// nothing else: false has to reach the api on its own, and an unchanged
-				// health check must stay out of the body or the monitor is rebuilt
 				Config: fmt.Sprintf(testAccComputeLoadBalancerConfigBasic, name, "10.106.0.0/24") + testAccComputeLoadBalancerPoolConfig(false),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -55,7 +52,6 @@ func TestAccComputeLoadBalancerPool_Basic(t *testing.T) {
 	})
 }
 
-// timeout 5s is the api minimum, interval is stored in seconds and read back as a duration string
 func testAccComputeLoadBalancerPoolConfig(stickySession bool) string {
 	return fmt.Sprintf(`
 data "flow_compute_load_balancer_algorithm" "round_robin" {

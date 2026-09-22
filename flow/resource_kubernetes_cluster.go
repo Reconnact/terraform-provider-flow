@@ -235,13 +235,11 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request resource.
 	cluster, err := waitForClusterReady(ctx, k.clusterService, order.Product.ID)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be ready: %s", err))
-		// the order went through, so the cluster exists and is billed — keep its id
 		if cluster.ID == 0 {
 			cluster.ID = order.Product.ID
 		}
 	}
 
-	// set state of the resource
 	var state kubernetesClusterResourceData
 	state.FromEntity(cluster)
 	state.Timeouts = config.Timeouts
@@ -293,7 +291,6 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request resource.
 	defer cancel()
 
 	if plan.Name.ValueString() != state.Name.ValueString() {
-		// no unlock wait here — the name update is not guarded by the action , unlike configuration and flavor
 		update := kubernetes.ClusterUpdate{
 			Name: plan.Name.ValueString(),
 		}
@@ -407,8 +404,6 @@ func isVariableSchemaMismatch(err error) bool {
 	return statusCode(err) == http.StatusBadRequest && strings.Contains(err.Error(), "invalid property at")
 }
 
-// the create order succeeds while the cluster is still provisioning — until it
-// is unlocked and healthy, updates are refused
 func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be ready", clusterID), func(ctx context.Context) (bool, error) {
 		got, err := service.Get(ctx, clusterID)

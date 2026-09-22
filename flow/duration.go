@@ -44,7 +44,7 @@ func (s secondsDurationModifier) PlanModifyString(ctx context.Context, request p
 
 	normalized, err := normalizeSecondsDuration(request.PlanValue.ValueString())
 	if err != nil {
-		return // the validator reports it, the plan is left alone
+		return
 	}
 
 	response.PlanValue = types.StringValue(normalized)

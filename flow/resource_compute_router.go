@@ -84,9 +84,6 @@ func (c computeRouterResource) Schema(ctx context.Context, request resource.Sche
 	}
 }
 
-// The api hands out an address when a router becomes public and takes it away again when it
-// turns private. Terraform proposes the prior value for a computed attribute, so without this
-// the plan promises the old address and the apply fails with an inconsistent result.
 type routerPublicIPUnknownOnChange struct{}
 
 func (routerPublicIPUnknownOnChange) Description(ctx context.Context) string {

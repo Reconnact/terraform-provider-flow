@@ -28,7 +28,6 @@ func TestAccComputeLoadBalancerMember_Basic(t *testing.T) {
 	})
 }
 
-// a member has to be an address in the load balancer's network, so it needs a server there
 var testAccComputeLoadBalancerMemberConfigBasic = `
 resource "flow_compute_load_balancer" "foobar" {
 	name        = flow_compute_server.foobar.name

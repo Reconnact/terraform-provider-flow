@@ -26,8 +26,6 @@ func TestAccComputeElasticIPServerAttachment_Basic(t *testing.T) {
 	})
 }
 
-// an elastic ip only attaches in a network behind a public router — the router
-// and its interface are the fixture, the attachment is what is tested
 const testAccComputeElasticIPServerAttachmentConfigBasic = `
 resource "flow_compute_router" "foobar" {
 	name        = "%s"

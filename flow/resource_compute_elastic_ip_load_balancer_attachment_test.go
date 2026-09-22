@@ -31,8 +31,6 @@ func TestAccComputeElasticIPLoadBalancerAttachment_Basic(t *testing.T) {
 	})
 }
 
-// an elastic ip only attaches in a network behind a public router — the router
-// and its interface are the fixture, the attachment is what is tested
 const testAccComputeElasticIPLoadBalancerAttachmentConfigBasic = `
 resource "flow_compute_network" "foobar" {
 	name        = "%[1]s"

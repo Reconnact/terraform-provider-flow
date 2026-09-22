@@ -171,7 +171,6 @@ func (c computeElasticIPServerAttachmentResource) Read(ctx context.Context, requ
 
 	state.FromEntity(server, elasticIP)
 
-	// no interface of the server carries the ip any more — detached outside terraform
 	if state.NetworkInterfaceID.IsNull() {
 		removeGone(ctx, response, fmt.Sprintf("attachment of elastic ip %d to server %d", state.ElasticIPID.ValueInt64(), state.ServerID.ValueInt64()))
 		return

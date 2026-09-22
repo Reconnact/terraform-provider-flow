@@ -75,7 +75,6 @@ resource "flow_compute_certificate" "foobar" {
 `
 
 // taken from https://github.com/hashicorp/terraform-plugin-sdk/blob/70ce77bce6118b74a49762bb401b46a723c0bab8/helper/acctest/random.go#L77
-// and modified to set the common name
 func randTLSCert(commonName string, orgName string) (string, string, error) {
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(int64(acctest.RandInt())),

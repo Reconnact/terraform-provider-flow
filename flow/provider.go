@@ -216,6 +216,9 @@ func (p *flowProvider) DataSources(ctx context.Context) []func() datasource.Data
 
 		newKubernetesClusterDataSource,
 		newKubernetesKubeConfigDataSource,
+		newKubernetesLoadBalancerDataSource,
+		newKubernetesNodeDataSource,
+		newKubernetesVolumeDataSource,
 
 		newMacBareMetalElasticIPDataSource,
 		newMacBareMetalNetworkDataSource,
@@ -224,9 +227,6 @@ func (p *flowProvider) DataSources(ctx context.Context) []func() datasource.Data
 	}
 }
 
-// the framework configures resources and data sources before the provider is
-// configured too (validate, plan without a token) — ProviderData is nil then
-// and the resource must stay unconfigured without complaint
 func clientFromProviderData(data any, diagnostics *diag.Diagnostics) (goclient.Client, bool) {
 	if data == nil {
 		return goclient.Client{}, false
@@ -281,8 +281,6 @@ func installTransport(c *http.Client) {
 	base := http.DefaultTransport.(*http.Transport).Clone()
 	base.ResponseHeaderTimeout = responseHeaderTimeout
 
-	// goclient's WithToken put its auth transport in front of the default one —
-	// replacing it drops the authorization header
 	var inner http.RoundTripper = base
 	switch t := c.Transport.(type) {
 	case goclient.AuthTransport:
@@ -293,6 +291,5 @@ func installTransport(c *http.Client) {
 		inner = t
 	}
 
-	// the read retry sits outside the log transport so every attempt is traced
 	c.Transport = readRetryTransport{base: logTransport{base: inner}}
 }

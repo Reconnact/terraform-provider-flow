@@ -11,12 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// importStatePassthroughInt64ID is a drop-in replacement for
-// resource.ImportStatePassthroughID for resources whose identifying
-// attribute is of Int64 type. The upstream helper writes the import ID into
-// the state as a string, which fails schema validation for numeric
-// attributes with "Int64 Type Validation Error: Expected Number value,
-// received tftypes.String".
 func importStatePassthroughInt64ID(ctx context.Context, attrPath path.Path, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	id, err := strconv.ParseInt(request.ID, 10, 64)
 	if err != nil {
@@ -30,7 +24,6 @@ func importStatePassthroughInt64ID(ctx context.Context, attrPath path.Path, requ
 	response.Diagnostics.Append(response.State.SetAttribute(ctx, attrPath, types.Int64Value(id))...)
 }
 
-// importStateCompositeInt64IDs is the same as importStatePassthroughInt64ID
 // for resources that are only addressable through a parent: the import id carries every identifying
 // attribute, colon separated, in the order of attrPaths (e.g. `server_id:id` → "42:7").
 func importStateCompositeInt64IDs(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse, attrPaths ...path.Path) {

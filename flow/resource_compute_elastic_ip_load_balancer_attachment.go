@@ -141,7 +141,6 @@ func (c computeElasticIPLoadBalancerAttachmentResource) Read(ctx context.Context
 
 	state.FromEntity(loadBalancer, elasticIP)
 
-	// no interface of the load balancer carries the ip any more — detached outside terraform
 	if state.ElasticIPID.IsNull() {
 		removeGone(ctx, response, fmt.Sprintf("attachment of elastic ip %d to load balancer %d", elasticIPID, loadBalancerID))
 		return

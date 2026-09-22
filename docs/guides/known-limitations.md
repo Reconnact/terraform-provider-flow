@@ -22,7 +22,14 @@ Most of these come from the api, not from the provider.
 | What | What to do |
 |---|---|
 | `version_id` on `flow_kubernetes_cluster` cannot be set at create | create the `flow_kubernetes_cluster` first, set `version_id` in a later apply |
-| no resources or data sources for the nodes, volumes and load balancers of a `flow_kubernetes_cluster` | manage them in the portal |
+| the nodes, volumes and load balancers of a `flow_kubernetes_cluster` are read-only: `flow_kubernetes_node`, `flow_kubernetes_volume` and `flow_kubernetes_load_balancer` are data sources | manage them inside the cluster or in the portal |
+
+## Mac bare metal
+
+| What | What to do |
+|---|---|
+| destroying a `flow_mac_bare_metal_device` only ends its commitment. Terraform reports the destroy as done, but the device keeps running and billing until the commitment period ends, its network interface stays, and the `flow_mac_bare_metal_network` cannot be destroyed before that. the call is made once and the api's answer is final, it is not retried like other deletes | destroy the device first, the network once the period is over |
+| an elastic ip attached to a `flow_mac_bare_metal_device` is deleted with the device at the end of its commitment period | detach it with `flow_mac_bare_metal_elastic_ip_device_attachment` before the device is destroyed, Terraform does that on its own when the attachment is a resource |
 
 ## Compute
 
