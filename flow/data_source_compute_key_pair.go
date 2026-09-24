@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -82,11 +82,11 @@ func (s *computeKeyPairDataSource) Configure(ctx context.Context, request dataso
 		return
 	}
 
-	s.keyPairService = compute.NewKeyPairService(client)
+	s.client = client
 }
 
 type computeKeyPairDataSource struct {
-	keyPairService compute.KeyPairService
+	client flowClient
 }
 
 func (s computeKeyPairDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -97,7 +97,7 @@ func (s computeKeyPairDataSource) Read(ctx context.Context, request datasource.R
 		return
 	}
 
-	list, err := s.keyPairService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := s.client.Compute.KeyPair.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list key pairs: %s", err))
 		return

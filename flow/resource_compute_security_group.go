@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -70,11 +70,11 @@ func (c *computeSecurityGroupResource) Configure(ctx context.Context, request re
 		return
 	}
 
-	c.securityGroupService = compute.NewSecurityGroupService(client)
+	c.client = client
 }
 
 type computeSecurityGroupResource struct {
-	securityGroupService compute.SecurityGroupService
+	client flowClient
 }
 
 func (c computeSecurityGroupResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -85,14 +85,14 @@ func (c computeSecurityGroupResource) Create(ctx context.Context, request resour
 		return
 	}
 
-	create := compute.SecurityGroupCreate{
+	create := compute.SecurityGroupCreateReq{
 		Name:       config.Name.ValueString(),
 		LocationID: int(config.LocationID.ValueInt64()),
 	}
 
 	var securityGroup compute.SecurityGroup
 	err := retryCreate(ctx, "create security group", func() (err error) {
-		securityGroup, err = c.securityGroupService.Create(ctx, create)
+		securityGroup, err = c.client.Compute.SecurityGroup.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -115,7 +115,7 @@ func (c computeSecurityGroupResource) Read(ctx context.Context, request resource
 		return
 	}
 
-	securityGroup, err := c.securityGroupService.Get(ctx, int(state.ID.ValueInt64()))
+	securityGroup, err := c.client.Compute.SecurityGroup.Get(ctx, compute.SecurityGroupGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("security group %d", state.ID.ValueInt64()))
@@ -146,20 +146,21 @@ func (c computeSecurityGroupResource) Update(ctx context.Context, request resour
 		return
 	}
 
-	current, err := c.securityGroupService.Get(ctx, int(state.ID.ValueInt64()))
+	current, err := c.client.Compute.SecurityGroup.Get(ctx, compute.SecurityGroupGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get security group: %s", err))
 		return
 	}
 
-	update := compute.SecurityGroupUpdate{
-		Name:        config.Name.ValueString(),
-		Description: current.Description,
+	update := compute.SecurityGroupUpdateReq{
+		ID:          uint(state.ID.ValueInt64()),
+		Name:        new(config.Name.ValueString()),
+		Description: new(current.Description),
 	}
 
 	var securityGroup compute.SecurityGroup
 	err = retry(ctx, "update security group", func() (err error) {
-		securityGroup, err = c.securityGroupService.Update(ctx, int(state.ID.ValueInt64()), update)
+		securityGroup, err = c.client.Compute.SecurityGroup.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -182,7 +183,7 @@ func (c computeSecurityGroupResource) Delete(ctx context.Context, request resour
 	}
 
 	err := retryDelete(ctx, "delete security group", func() error {
-		return c.securityGroupService.Delete(ctx, int(state.ID.ValueInt64()))
+		return c.client.Compute.SecurityGroup.Delete(ctx, compute.SecurityGroupDeleteReq{ID: uint(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group: %s", err))

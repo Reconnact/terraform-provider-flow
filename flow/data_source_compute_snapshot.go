@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -94,11 +94,11 @@ func (c *computeSnapshotDataSource) Configure(ctx context.Context, request datas
 		return
 	}
 
-	c.snapshotService = compute.NewSnapshotService(client)
+	c.client = client
 }
 
 type computeSnapshotDataSource struct {
-	snapshotService compute.SnapshotService
+	client flowClient
 }
 
 func (c computeSnapshotDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -109,7 +109,7 @@ func (c computeSnapshotDataSource) Read(ctx context.Context, request datasource.
 		return
 	}
 
-	list, err := c.snapshotService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.Snapshot.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list snapshots: %s", err))
 		return

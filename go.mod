@@ -1,9 +1,9 @@
 module github.com/flowswiss/terraform-provider-flow
 
-go 1.25.8
+go 1.26
 
 require (
-	github.com/flowswiss/goclient v0.2.6
+	github.com/flowswiss/goclient/v2 v2.0.2
 	github.com/hashicorp/terraform-plugin-docs v0.25.0
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-timeouts v0.7.0
@@ -28,7 +28,7 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
+	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/cli v1.1.7 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

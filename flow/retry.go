@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flowswiss/goclient"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -123,7 +123,7 @@ func classifyRetry(err error, op retryOperation) retryDecision {
 		return retryStop
 	}
 
-	var apiErr goclient.APIError
+	var apiErr core.APIError
 	if errors.As(err, &apiErr) && apiErr.Response() != nil {
 		switch apiErr.Response().StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
@@ -155,7 +155,7 @@ func isTransportError(err error) bool {
 }
 
 func statusCode(err error) int {
-	var apiErr goclient.APIError
+	var apiErr core.APIError
 	if errors.As(err, &apiErr) && apiErr.Response() != nil {
 		return apiErr.Response().StatusCode
 	}

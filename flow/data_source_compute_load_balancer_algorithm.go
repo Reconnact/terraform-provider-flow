@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -82,11 +82,11 @@ func (c *computeLoadBalancerAlgorithmDataSource) Configure(ctx context.Context, 
 		return
 	}
 
-	c.loadBalancerEntityService = compute.NewLoadBalancerEntityService(client)
+	c.client = client
 }
 
 type computeLoadBalancerAlgorithmDataSource struct {
-	loadBalancerEntityService compute.LoadBalancerEntityService
+	client flowClient
 }
 
 func (c computeLoadBalancerAlgorithmDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -97,7 +97,7 @@ func (c computeLoadBalancerAlgorithmDataSource) Read(ctx context.Context, reques
 		return
 	}
 
-	list, err := c.loadBalancerEntityService.ListAlgorithms(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.LoadBalancerEntity.ListAlgorithms(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list load balancer algorithms: %s", err))
 		return

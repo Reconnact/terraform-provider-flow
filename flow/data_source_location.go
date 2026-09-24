@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/common"
+	"github.com/flowswiss/goclient/v2/common"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -116,7 +116,7 @@ func (l *locationDataSource) Configure(ctx context.Context, request datasource.C
 }
 
 type locationDataSource struct {
-	client goclient.Client
+	client flowClient
 }
 
 func (l locationDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -127,7 +127,7 @@ func (l locationDataSource) Read(ctx context.Context, request datasource.ReadReq
 		return
 	}
 
-	list, err := common.NewLocationService(l.client).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := l.client.Common.Location.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get locations: %s", err))
 		return

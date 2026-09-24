@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient/compute"
-	"github.com/flowswiss/goclient/kubernetes"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/kubernetes"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/datasource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -64,11 +64,11 @@ func (k *kubernetesKubeConfigDataSource) Configure(ctx context.Context, request 
 		return
 	}
 
-	k.clusterService = kubernetes.NewClusterService(client)
+	k.client = client
 }
 
 type kubernetesKubeConfigDataSource struct {
-	clusterService kubernetes.ClusterService
+	client flowClient
 }
 
 func (k kubernetesKubeConfigDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -84,19 +84,19 @@ func (k kubernetesKubeConfigDataSource) Read(ctx context.Context, request dataso
 
 	clusterID := int(config.ClusterID.ValueInt64())
 
-	cluster, err := k.clusterService.Get(ctx, clusterID)
+	cluster, err := k.client.Kubernetes.Cluster.Get(ctx, kubernetes.ClusterGetReq{ID: uint(clusterID)})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get cluster: %s", err))
 		return
 	}
 	if cluster.Locked || cluster.Status.ID != compute.ClusterStatusHealthy {
-		if _, err := waitForClusterReady(ctx, k.clusterService, clusterID); err != nil {
+		if _, err := waitForClusterReady(ctx, k.client.Kubernetes.Cluster, clusterID); err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be ready: %s", err))
 			return
 		}
 	}
 
-	kubeConfig, err := k.clusterService.GetKubeConfig(ctx, clusterID)
+	kubeConfig, err := k.client.Kubernetes.Cluster.GetKubeConfig(ctx, kubernetes.ClusterGetReq{ID: uint(clusterID)})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get kube config: %s", err))
 		return

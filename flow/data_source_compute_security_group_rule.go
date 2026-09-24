@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -181,11 +181,11 @@ func (c *computeSecurityGroupRuleDataSource) Configure(ctx context.Context, requ
 		return
 	}
 
-	c.securityGroupService = compute.NewSecurityGroupService(client)
+	c.client = client
 }
 
 type computeSecurityGroupRuleDataSource struct {
-	securityGroupService compute.SecurityGroupService
+	client flowClient
 }
 
 func (c computeSecurityGroupRuleDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -199,7 +199,7 @@ func (c computeSecurityGroupRuleDataSource) Read(ctx context.Context, request da
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
 	ruleID := int(config.ID.ValueInt64())
 
-	list, err := c.securityGroupService.Rules(securityGroupID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.SecurityGroupRule.List(ctx, compute.SecurityGroupRuleListReq{SecurityGroupID: uint(securityGroupID), Cursor: core.CursorAll})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security group rules: %s", err))
 		return

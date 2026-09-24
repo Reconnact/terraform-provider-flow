@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/flowswiss/goclient/common"
-	"github.com/flowswiss/goclient/compute"
-	"github.com/flowswiss/goclient/kubernetes"
+	"github.com/flowswiss/goclient/v2/common"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/kubernetes"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -172,13 +172,11 @@ func (k *kubernetesClusterResource) Configure(ctx context.Context, request resou
 		return
 	}
 
-	k.orderService = common.NewOrderService(client)
-	k.clusterService = kubernetes.NewClusterService(client)
+	k.client = client
 }
 
 type kubernetesClusterResource struct {
-	orderService   common.OrderService
-	clusterService kubernetes.ClusterService
+	client flowClient
 }
 
 func (k kubernetesClusterResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -201,11 +199,11 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request resource.
 	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
 	defer cancel()
 
-	create := kubernetes.ClusterCreate{
+	create := kubernetes.ClusterCreateReq{
 		Name:       config.Name.ValueString(),
 		LocationID: int(config.LocationID.ValueInt64()),
 		NetworkID:  int(config.NetworkID.ValueInt64()),
-		Worker: kubernetes.ClusterWorkerCreate{
+		Worker: kubernetes.ClusterWorkerCreateReq{
 			ProductID: int(config.NodeProductID.ValueInt64()),
 			Count:     int(config.NodeCount.ValueInt64()),
 		},
@@ -218,7 +216,7 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request resource.
 
 	var ordering common.Ordering
 	err := retryCreate(ctx, "create cluster", func() (err error) {
-		ordering, err = k.clusterService.Create(ctx, create)
+		ordering, err = k.client.Kubernetes.Cluster.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -226,13 +224,13 @@ func (k kubernetesClusterResource) Create(ctx context.Context, request resource.
 		return
 	}
 
-	order, err := waitForOrder(ctx, k.orderService, ordering)
+	order, err := waitForOrder(ctx, k.client.Common.Order, ordering)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster creation: %s", err))
 		return
 	}
 
-	cluster, err := waitForClusterReady(ctx, k.clusterService, order.Product.ID)
+	cluster, err := waitForClusterReady(ctx, k.client.Kubernetes.Cluster, order.Product.ID)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for cluster to be ready: %s", err))
 		if cluster.ID == 0 {
@@ -256,7 +254,7 @@ func (k kubernetesClusterResource) Read(ctx context.Context, request resource.Re
 		return
 	}
 
-	cluster, err := k.clusterService.Get(ctx, int(state.ID.ValueInt64()))
+	cluster, err := k.client.Kubernetes.Cluster.Get(ctx, kubernetes.ClusterGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("cluster %d", state.ID.ValueInt64()))
@@ -291,12 +289,13 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request resource.
 	defer cancel()
 
 	if plan.Name.ValueString() != state.Name.ValueString() {
-		update := kubernetes.ClusterUpdate{
-			Name: plan.Name.ValueString(),
+		update := kubernetes.ClusterUpdateReq{
+			ID:   uint(state.ID.ValueInt64()),
+			Name: nonZero(plan.Name.ValueString()),
 		}
 
 		err := retry(ctx, "update cluster", func() (err error) {
-			_, err = k.clusterService.Update(ctx, int(state.ID.ValueInt64()), update)
+			_, err = k.client.Kubernetes.Cluster.Update(ctx, update)
 			return err
 		})
 		if err != nil {
@@ -311,18 +310,19 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request resource.
 			return
 		}
 
-		current, err := k.clusterService.GetConfiguration(ctx, int(state.ID.ValueInt64()))
+		current, err := k.client.Kubernetes.Cluster.GetConfiguration(ctx, kubernetes.ClusterGetReq{ID: uint(state.ID.ValueInt64())})
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to read cluster configuration: %s", err))
 			return
 		}
-		update := kubernetes.ClusterConfiguration{
+		update := kubernetes.ClusterConfigurationReq{
+			ID:        uint(state.ID.ValueInt64()),
 			VersionID: int(plan.VersionID.ValueInt64()),
 			Variables: current.Variables,
 		}
 
 		err = retry(ctx, "update cluster configuration", func() (err error) {
-			_, err = k.clusterService.UpdateConfiguration(ctx, int(state.ID.ValueInt64()), update)
+			_, err = k.client.Kubernetes.Cluster.UpdateConfiguration(ctx, update)
 			return err
 		})
 		if err != nil {
@@ -345,15 +345,16 @@ func (k kubernetesClusterResource) Update(ctx context.Context, request resource.
 			return
 		}
 
-		update := kubernetes.ClusterUpdateFlavor{
-			Worker: kubernetes.ClusterWorkerUpdate{
+		update := kubernetes.ClusterUpdateFlavorReq{
+			ID: uint(state.ID.ValueInt64()),
+			Worker: kubernetes.ClusterWorkerUpdateReq{
 				ProductID: int(plan.NodeProductID.ValueInt64()),
 				Count:     int(plan.NodeCount.ValueInt64()),
 			},
 		}
 
 		err := retry(ctx, "update cluster flavor", func() (err error) {
-			_, err = k.clusterService.UpdateFlavor(ctx, int(state.ID.ValueInt64()), update)
+			_, err = k.client.Kubernetes.Cluster.UpdateFlavor(ctx, update)
 			return err
 		})
 		if err != nil {
@@ -387,7 +388,7 @@ func (k kubernetesClusterResource) Delete(ctx context.Context, request resource.
 	defer cancel()
 
 	err := retryDelete(ctx, "delete cluster", func() error {
-		return k.clusterService.Delete(ctx, int(state.ID.ValueInt64()))
+		return k.client.Kubernetes.Cluster.Delete(ctx, kubernetes.ClusterDeleteReq{ID: uint(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete cluster: %s", err))
@@ -404,9 +405,9 @@ func isVariableSchemaMismatch(err error) bool {
 	return statusCode(err) == http.StatusBadRequest && strings.Contains(err.Error(), "invalid property at")
 }
 
-func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService, clusterID int) (cluster kubernetes.Cluster, err error) {
+func waitForClusterReady(ctx context.Context, service *kubernetes.ClusterService, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be ready", clusterID), func(ctx context.Context) (bool, error) {
-		got, err := service.Get(ctx, clusterID)
+		got, err := service.Get(ctx, kubernetes.ClusterGetReq{ID: uint(clusterID)})
 		if err != nil {
 			return false, err
 		}
@@ -419,7 +420,7 @@ func waitForClusterReady(ctx context.Context, service kubernetes.ClusterService,
 
 func (k kubernetesClusterResource) waitForClusterUnlocked(ctx context.Context, clusterID int) (cluster kubernetes.Cluster, err error) {
 	err = waitFor(ctx, clusterWaitTimeout, defaultWaitInterval, fmt.Sprintf("cluster %d to be unlocked", clusterID), func(ctx context.Context) (bool, error) {
-		got, err := k.clusterService.Get(ctx, clusterID)
+		got, err := k.client.Kubernetes.Cluster.Get(ctx, kubernetes.ClusterGetReq{ID: uint(clusterID)})
 		if err != nil {
 			return false, err
 		}
@@ -432,7 +433,7 @@ func (k kubernetesClusterResource) waitForClusterUnlocked(ctx context.Context, c
 
 func (k kubernetesClusterResource) waitForClusterGone(ctx context.Context, clusterID int) error {
 	return waitForGone(ctx, clusterWaitTimeout, fmt.Sprintf("cluster %d", clusterID), func(ctx context.Context) error {
-		_, err := k.clusterService.Get(ctx, clusterID)
+		_, err := k.client.Kubernetes.Cluster.Get(ctx, kubernetes.ClusterGetReq{ID: uint(clusterID)})
 		return err
 	})
 }

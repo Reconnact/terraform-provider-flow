@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient/common"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/common"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -125,13 +125,11 @@ func (c *computeLoadBalancerResource) Configure(ctx context.Context, request res
 		return
 	}
 
-	c.loadBalancerService = compute.NewLoadBalancerService(client)
-	c.orderService = common.NewOrderService(client)
+	c.client = client
 }
 
 type computeLoadBalancerResource struct {
-	loadBalancerService compute.LoadBalancerService
-	orderService        common.OrderService
+	client flowClient
 }
 
 func (c computeLoadBalancerResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -144,7 +142,7 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request resourc
 	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
 	defer cancel()
 
-	create := compute.LoadBalancerCreate{
+	create := compute.LoadBalancerCreateReq{
 		Name:       config.Name.ValueString(),
 		LocationID: int(config.LocationID.ValueInt64()),
 		NetworkID:  int(config.NetworkID.ValueInt64()),
@@ -153,7 +151,7 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request resourc
 
 	var ordering common.Ordering
 	err := retryCreate(ctx, "create load balancer", func() (err error) {
-		ordering, err = c.loadBalancerService.Create(ctx, create)
+		ordering, err = c.client.Compute.LoadBalancer.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -161,13 +159,13 @@ func (c computeLoadBalancerResource) Create(ctx context.Context, request resourc
 		return
 	}
 
-	order, err := waitForOrder(ctx, c.orderService, ordering)
+	order, err := waitForOrder(ctx, c.client.Common.Order, ordering)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer creation: %s", err))
 		return
 	}
 
-	loadBalancer, err := waitForLoadBalancerMutable(ctx, c.loadBalancerService, order.Product.ID)
+	loadBalancer, err := waitForLoadBalancerMutable(ctx, c.client.Compute.LoadBalancer, uint(order.Product.ID))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		if loadBalancer.ID == 0 {
@@ -189,7 +187,7 @@ func (c computeLoadBalancerResource) Read(ctx context.Context, request resource.
 		return
 	}
 
-	loadBalancer, err := c.loadBalancerService.Get(ctx, int(state.ID.ValueInt64()))
+	loadBalancer, err := c.client.Compute.LoadBalancer.Get(ctx, compute.LoadBalancerGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("load balancer %d", state.ID.ValueInt64()))
@@ -217,13 +215,14 @@ func (c computeLoadBalancerResource) Update(ctx context.Context, request resourc
 		return
 	}
 
-	update := compute.LoadBalancerUpdate{
-		Name: config.Name.ValueString(),
+	update := compute.LoadBalancerUpdateReq{
+		ID:   uint(state.ID.ValueInt64()),
+		Name: nonZero(config.Name.ValueString()),
 	}
 
 	var loadBalancer compute.LoadBalancer
 	err := retry(ctx, "update load balancer", func() (err error) {
-		loadBalancer, err = c.loadBalancerService.Update(ctx, int(state.ID.ValueInt64()), update)
+		loadBalancer, err = c.client.Compute.LoadBalancer.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -247,10 +246,10 @@ func (c computeLoadBalancerResource) Delete(ctx context.Context, request resourc
 	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
 	defer cancel()
 
-	loadBalancerID := int(state.ID.ValueInt64())
+	loadBalancerID := uint(state.ID.ValueInt64())
 
 	err := retryDelete(ctx, "delete load balancer", func() error {
-		return c.loadBalancerService.Delete(ctx, loadBalancerID)
+		return c.client.Compute.LoadBalancer.Delete(ctx, compute.LoadBalancerDeleteReq{ID: loadBalancerID})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete load balancer: %s", err))
@@ -258,7 +257,7 @@ func (c computeLoadBalancerResource) Delete(ctx context.Context, request resourc
 	}
 
 	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("load balancer %d", loadBalancerID), func(ctx context.Context) error {
-		_, err := c.loadBalancerService.Get(ctx, loadBalancerID)
+		_, err := c.client.Compute.LoadBalancer.Get(ctx, compute.LoadBalancerGetReq{ID: loadBalancerID})
 		return err
 	})
 	if err != nil {
@@ -271,9 +270,9 @@ func (c computeLoadBalancerResource) ImportState(ctx context.Context, request re
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-func waitForLoadBalancerMutable(ctx context.Context, service compute.LoadBalancerService, loadBalancerID int) (loadBalancer compute.LoadBalancer, err error) {
+func waitForLoadBalancerMutable(ctx context.Context, service *compute.LoadBalancerService, loadBalancerID uint) (loadBalancer compute.LoadBalancer, err error) {
 	err = waitFor(ctx, loadBalancerTimeout, defaultWaitInterval, fmt.Sprintf("load balancer %d to be mutable", loadBalancerID), func(ctx context.Context) (bool, error) {
-		got, err := service.Get(ctx, loadBalancerID)
+		got, err := service.Get(ctx, compute.LoadBalancerGetReq{ID: loadBalancerID})
 		if err != nil {
 			if isNotFound(err) {
 				return false, stopWaiting(err)

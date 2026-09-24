@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -177,11 +177,11 @@ func (c *computeCertificateDataSource) Configure(ctx context.Context, request da
 		return
 	}
 
-	c.certificateService = compute.NewCertificateService(client)
+	c.client = client
 }
 
 type computeCertificateDataSource struct {
-	certificateService compute.CertificateService
+	client flowClient
 }
 
 func (c computeCertificateDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -192,7 +192,7 @@ func (c computeCertificateDataSource) Read(ctx context.Context, request datasour
 		return
 	}
 
-	list, err := c.certificateService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.Certificate.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list certificates: %s", err))
 		return

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/common"
+	"github.com/flowswiss/goclient/v2/common"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -103,7 +103,7 @@ func (l *moduleDataSource) Configure(ctx context.Context, request datasource.Con
 }
 
 type moduleDataSource struct {
-	client goclient.Client
+	client flowClient
 }
 
 func (l moduleDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -114,7 +114,7 @@ func (l moduleDataSource) Read(ctx context.Context, request datasource.ReadReque
 		return
 	}
 
-	list, err := common.NewModuleService(l.client).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := l.client.Common.Module.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get modules: %s", err))
 		return

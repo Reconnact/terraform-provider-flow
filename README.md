@@ -8,7 +8,7 @@ Read the two guides first: update or replace, and known limitations.
 ## Requirements
 
 - Terraform 1.11 or later
-- Go 1.25 or later to build
+- Go 1.26 or later to build
 
 ## Developing
 

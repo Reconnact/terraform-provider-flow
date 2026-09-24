@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -115,11 +115,11 @@ func (r *computeVolumeResource) Configure(ctx context.Context, request resource.
 		return
 	}
 
-	r.volumeService = compute.NewVolumeService(client)
+	r.client = client
 }
 
 type computeVolumeResource struct {
-	volumeService compute.VolumeService
+	client flowClient
 }
 
 func (r computeVolumeResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -133,16 +133,16 @@ func (r computeVolumeResource) Create(ctx context.Context, request resource.Crea
 	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
 	defer cancel()
 
-	create := compute.VolumeCreate{
+	create := compute.VolumeCreateReq{
 		Name:       config.Name.ValueString(),
 		Size:       int(config.Size.ValueInt64()),
 		LocationID: int(config.Location.ValueInt64()),
-		SnapshotID: int(config.Snapshot.ValueInt64()),
+		SnapshotID: nonZero(int(config.Snapshot.ValueInt64())),
 	}
 
 	var volume compute.Volume
 	err := retryCreate(ctx, "create volume", func() (err error) {
-		volume, err = r.volumeService.Create(ctx, create)
+		volume, err = r.client.Compute.Volume.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -181,7 +181,7 @@ func (r computeVolumeResource) Read(ctx context.Context, request resource.ReadRe
 		return
 	}
 
-	volume, err := r.volumeService.Get(ctx, int(state.ID.ValueInt64()))
+	volume, err := r.client.Compute.Volume.Get(ctx, compute.VolumeGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("volume %d", state.ID.ValueInt64()))
@@ -215,7 +215,7 @@ func (r computeVolumeResource) Update(ctx context.Context, request resource.Upda
 	ctx, cancel := withTimeout(ctx, plan.Timeouts.Update, &response.Diagnostics)
 	defer cancel()
 
-	volume, err := r.volumeService.Get(ctx, int(state.ID.ValueInt64()))
+	volume, err := r.client.Compute.Volume.Get(ctx, compute.VolumeGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get volume: %s", err))
 		return
@@ -228,12 +228,13 @@ func (r computeVolumeResource) Update(ctx context.Context, request resource.Upda
 			"requested_name": plan.Name,
 		})
 
-		update := compute.VolumeUpdate{
-			Name: plan.Name.ValueString(),
+		update := compute.VolumeUpdateReq{
+			ID:   uint(state.ID.ValueInt64()),
+			Name: new(plan.Name.ValueString()),
 		}
 
 		err = retry(ctx, "update volume", func() (err error) {
-			volume, err = r.volumeService.Update(ctx, int(state.ID.ValueInt64()), update)
+			volume, err = r.client.Compute.Volume.Update(ctx, update)
 			return err
 		})
 		if err != nil {
@@ -249,12 +250,13 @@ func (r computeVolumeResource) Update(ctx context.Context, request resource.Upda
 			"requested_size": plan.Size,
 		})
 
-		expand := compute.VolumeExpand{
-			Size: int(plan.Size.ValueInt64()),
+		expand := compute.VolumeExpandReq{
+			VolumeID: uint(state.ID.ValueInt64()),
+			Size:     int(plan.Size.ValueInt64()),
 		}
 
 		err = retry(ctx, "expand volume", func() (err error) {
-			volume, err = r.volumeService.Expand(ctx, int(state.ID.ValueInt64()), expand)
+			volume, err = r.client.Compute.Volume.Expand(ctx, expand)
 			return err
 		})
 		if err != nil {
@@ -292,7 +294,7 @@ func (r computeVolumeResource) Delete(ctx context.Context, request resource.Dele
 	volumeID := int(state.ID.ValueInt64())
 
 	err := retryDelete(ctx, "delete volume", func() error {
-		return r.volumeService.Delete(ctx, volumeID)
+		return r.client.Compute.Volume.Delete(ctx, compute.VolumeDeleteReq{ID: uint(volumeID)})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete volume: %s", err))
@@ -300,7 +302,7 @@ func (r computeVolumeResource) Delete(ctx context.Context, request resource.Dele
 	}
 
 	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("volume %d", volumeID), func(ctx context.Context) error {
-		_, err := r.volumeService.Get(ctx, volumeID)
+		_, err := r.client.Compute.Volume.Get(ctx, compute.VolumeGetReq{ID: uint(volumeID)})
 		return err
 	})
 	if err != nil {
@@ -315,7 +317,7 @@ func (r computeVolumeResource) ImportState(ctx context.Context, request resource
 
 func (r computeVolumeResource) waitForVolumeSettled(ctx context.Context, volumeID int, timeout time.Duration) (volume compute.Volume, err error) {
 	err = waitFor(ctx, timeout, defaultWaitInterval, fmt.Sprintf("volume %d to settle", volumeID), func(ctx context.Context) (bool, error) {
-		got, err := r.volumeService.Get(ctx, volumeID)
+		got, err := r.client.Compute.Volume.Get(ctx, compute.VolumeGetReq{ID: uint(volumeID)})
 		if err != nil {
 			return false, err
 		}

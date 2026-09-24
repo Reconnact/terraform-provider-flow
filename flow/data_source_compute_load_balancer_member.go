@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -114,11 +114,11 @@ func (c *computeLoadBalancerMemberDataSource) Configure(ctx context.Context, req
 		return
 	}
 
-	c.loadBalancerService = compute.NewLoadBalancerService(client)
+	c.client = client
 }
 
 type computeLoadBalancerMemberDataSource struct {
-	loadBalancerService compute.LoadBalancerService
+	client flowClient
 }
 
 func (c computeLoadBalancerMemberDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -132,7 +132,11 @@ func (c computeLoadBalancerMemberDataSource) Read(ctx context.Context, request d
 	loadBalancerID := int(config.LoadBalancerID.ValueInt64())
 	poolID := int(config.PoolID.ValueInt64())
 
-	list, err := c.loadBalancerService.Pools(loadBalancerID).Members(poolID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.LoadBalancerMember.List(ctx, compute.LoadBalancerMemberListReq{
+		LoadBalancerID:     uint(loadBalancerID),
+		LoadBalancerPoolID: uint(poolID),
+		Cursor:             core.CursorAll,
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list load balancer members: %s", err))
 		return

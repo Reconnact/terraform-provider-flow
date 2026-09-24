@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -83,16 +82,11 @@ func (c *computeElasticIPServerAttachmentResource) Configure(ctx context.Context
 		return
 	}
 
-	c.serverService = compute.NewServerService(client)
-	c.elasticIPService = compute.NewElasticIPService(client)
 	c.client = client
 }
 
 type computeElasticIPServerAttachmentResource struct {
-	serverService    compute.ServerService
-	elasticIPService compute.ElasticIPService
-
-	client goclient.Client
+	client flowClient
 }
 
 func (c computeElasticIPServerAttachmentResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -105,14 +99,15 @@ func (c computeElasticIPServerAttachmentResource) Create(ctx context.Context, re
 
 	serverID := int(config.ServerID.ValueInt64())
 
-	attach := compute.ElasticIPAttach{
+	attach := compute.ElasticIPAttachmentCreateReq{
+		ServerID:           uint(serverID),
 		ElasticIPID:        int(config.ElasticIPID.ValueInt64()),
 		NetworkInterfaceID: int(config.NetworkInterfaceID.ValueInt64()),
 	}
 
 	var elasticIP compute.ElasticIP
 	err := retry(ctx, "attach elastic ip", func() (err error) {
-		elasticIP, err = compute.NewServerElasticIPService(c.client, serverID).Attach(ctx, attach)
+		elasticIP, err = c.client.Compute.ElasticIPAttachment.Create(ctx, attach)
 		return err
 	})
 	if err != nil {
@@ -120,7 +115,7 @@ func (c computeElasticIPServerAttachmentResource) Create(ctx context.Context, re
 		return
 	}
 
-	server, err := c.serverService.Get(ctx, serverID)
+	server, err := c.client.Compute.Server.Get(ctx, compute.ServerGetReq{ID: uint(serverID)})
 	if err != nil {
 		response.Diagnostics.AddWarning(
 			"Incomplete Read",
@@ -148,7 +143,7 @@ func (c computeElasticIPServerAttachmentResource) Read(ctx context.Context, requ
 		return
 	}
 
-	server, err := c.serverService.Get(ctx, int(state.ServerID.ValueInt64()))
+	server, err := c.client.Compute.Server.Get(ctx, compute.ServerGetReq{ID: uint(state.ServerID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("server %d", state.ServerID.ValueInt64()))
@@ -158,7 +153,7 @@ func (c computeElasticIPServerAttachmentResource) Read(ctx context.Context, requ
 		return
 	}
 
-	elasticIP, found, err := findComputeElasticIP(ctx, c.elasticIPService, int(state.ElasticIPID.ValueInt64()))
+	elasticIP, found, err := findComputeElasticIP(ctx, c.client.Compute.ElasticIP, int(state.ElasticIPID.ValueInt64()))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", err.Error())
 		return
@@ -192,7 +187,10 @@ func (c computeElasticIPServerAttachmentResource) Delete(ctx context.Context, re
 	}
 
 	err := retryDelete(ctx, "detach elastic ip", func() error {
-		return compute.NewServerElasticIPService(c.client, int(state.ServerID.ValueInt64())).Detach(ctx, int(state.ElasticIPID.ValueInt64()))
+		return c.client.Compute.ElasticIPAttachment.Delete(ctx, compute.ElasticIPAttachmentDeleteReq{
+			ServerID:    uint(state.ServerID.ValueInt64()),
+			ElasticIPID: uint(state.ElasticIPID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach elastic ip: %s", err))

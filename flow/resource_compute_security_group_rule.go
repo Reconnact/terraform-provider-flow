@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -218,12 +218,10 @@ func (c *computeSecurityGroupRuleResource) Configure(ctx context.Context, reques
 	}
 
 	c.client = client
-	c.securityGroupService = compute.NewSecurityGroupService(client)
 }
 
 type computeSecurityGroupRuleResource struct {
-	client               goclient.Client
-	securityGroupService compute.SecurityGroupService
+	client flowClient
 }
 
 func (c computeSecurityGroupRuleResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -235,16 +233,17 @@ func (c computeSecurityGroupRuleResource) Create(ctx context.Context, request re
 	}
 
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
-	create := securityGroupRuleBody{
+	create := compute.SecurityGroupRuleCreateReq{
+		SecurityGroupID:       uint(securityGroupID),
 		Direction:             config.Direction.ValueString(),
 		Protocol:              config.Protocol.ToNumber(),
-		IPRange:               config.IPRange.ValueString(),
-		RemoteSecurityGroupID: int(config.RemoteSecurityGroupID.ValueInt64()),
+		IPRange:               nonZero(config.IPRange.ValueString()),
+		RemoteSecurityGroupID: nonZero(int(config.RemoteSecurityGroupID.ValueInt64())),
 	}
 
 	if config.PortRange != nil {
-		create.FromPort = int(config.PortRange.From.ValueInt64())
-		create.ToPort = int(config.PortRange.To.ValueInt64())
+		create.FromPort = nonZero(int(config.PortRange.From.ValueInt64()))
+		create.ToPort = nonZero(int(config.PortRange.To.ValueInt64()))
 	}
 
 	if config.ICMP != nil {
@@ -254,7 +253,7 @@ func (c computeSecurityGroupRuleResource) Create(ctx context.Context, request re
 
 	var rule compute.SecurityGroupRule
 	err := retryCreate(ctx, "create security group rule", func() (err error) {
-		rule, err = createComputeSecurityGroupRule(ctx, c.client, securityGroupID, create)
+		rule, err = c.client.Compute.SecurityGroupRule.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -280,7 +279,10 @@ func (c computeSecurityGroupRuleResource) Read(ctx context.Context, request reso
 	securityGroupID := int(state.SecurityGroupID.ValueInt64())
 	ruleID := int(state.ID.ValueInt64())
 
-	list, err := c.securityGroupService.Rules(securityGroupID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.SecurityGroupRule.List(ctx, compute.SecurityGroupRuleListReq{
+		SecurityGroupID: uint(securityGroupID),
+		Cursor:          core.CursorAll,
+	})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("security group %d", securityGroupID))
@@ -319,18 +321,19 @@ func (c computeSecurityGroupRuleResource) Update(ctx context.Context, request re
 	}
 
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
-	ruleID := int(state.ID.ValueInt64())
 
-	update := securityGroupRuleBody{
-		Direction:             config.Direction.ValueString(),
-		Protocol:              config.Protocol.ToNumber(),
-		IPRange:               config.IPRange.ValueString(),
-		RemoteSecurityGroupID: int(config.RemoteSecurityGroupID.ValueInt64()),
+	update := compute.SecurityGroupRuleUpdateReq{
+		SecurityGroupID:       uint(securityGroupID),
+		SecurityGroupRuleID:   uint(state.ID.ValueInt64()),
+		Direction:             new(config.Direction.ValueString()),
+		Protocol:              new(config.Protocol.ToNumber()),
+		IPRange:               nonZero(config.IPRange.ValueString()),
+		RemoteSecurityGroupID: nonZero(int(config.RemoteSecurityGroupID.ValueInt64())),
 	}
 
 	if config.PortRange != nil {
-		update.FromPort = int(config.PortRange.From.ValueInt64())
-		update.ToPort = int(config.PortRange.To.ValueInt64())
+		update.FromPort = nonZero(int(config.PortRange.From.ValueInt64()))
+		update.ToPort = nonZero(int(config.PortRange.To.ValueInt64()))
 	}
 
 	if config.ICMP != nil {
@@ -340,7 +343,7 @@ func (c computeSecurityGroupRuleResource) Update(ctx context.Context, request re
 
 	var rule compute.SecurityGroupRule
 	err := retry(ctx, "update security group rule", func() (err error) {
-		rule, err = updateComputeSecurityGroupRule(ctx, c.client, securityGroupID, ruleID, update)
+		rule, err = c.client.Compute.SecurityGroupRule.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -362,11 +365,11 @@ func (c computeSecurityGroupRuleResource) Delete(ctx context.Context, request re
 		return
 	}
 
-	securityGroupID := int(state.SecurityGroupID.ValueInt64())
-	ruleID := int(state.ID.ValueInt64())
-
 	err := retryDelete(ctx, "delete security group rule", func() error {
-		return c.securityGroupService.Rules(securityGroupID).Delete(ctx, ruleID)
+		return c.client.Compute.SecurityGroupRule.Delete(ctx, compute.SecurityGroupRuleDeleteReq{
+			SecurityGroupID:     uint(state.SecurityGroupID.ValueInt64()),
+			SecurityGroupRuleID: uint(state.ID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group rule: %s", err))

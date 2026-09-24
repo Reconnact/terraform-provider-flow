@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -84,16 +83,11 @@ func (c *macBareMetalElasticIPDeviceAttachmentResource) Configure(ctx context.Co
 		return
 	}
 
-	c.deviceService = macbaremetal.NewDeviceService(client)
-	c.elasticIPService = macbaremetal.NewElasticIPService(client)
 	c.client = client
 }
 
 type macBareMetalElasticIPDeviceAttachmentResource struct {
-	deviceService    macbaremetal.DeviceService
-	elasticIPService macbaremetal.ElasticIPService
-
-	client goclient.Client
+	client flowClient
 }
 
 func (c macBareMetalElasticIPDeviceAttachmentResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -106,14 +100,15 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Create(ctx context.Contex
 
 	serverID := int(config.DeviceID.ValueInt64())
 
-	attach := macbaremetal.ElasticIPAttach{
+	attach := macbaremetal.ElasticIPAttachmentCreateReq{
+		DeviceID:           uint(serverID),
 		ElasticIPID:        int(config.ElasticIPID.ValueInt64()),
 		NetworkInterfaceID: int(config.NetworkInterfaceID.ValueInt64()),
 	}
 
 	var elasticIP macbaremetal.ElasticIP
 	err := retry(ctx, "attach elastic ip", func() (err error) {
-		elasticIP, err = macbaremetal.NewAttachedElasticIPService(c.client, serverID).Attach(ctx, attach)
+		elasticIP, err = c.client.MacBareMetal.ElasticIPAttachment.Create(ctx, attach)
 		return err
 	})
 	if err != nil {
@@ -121,7 +116,7 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Create(ctx context.Contex
 		return
 	}
 
-	device, err := macbaremetal.NewDeviceService(c.client).Get(ctx, serverID)
+	device, err := c.client.MacBareMetal.Device.Get(ctx, macbaremetal.DeviceGetReq{ID: uint(serverID)})
 	if err != nil {
 		response.Diagnostics.AddWarning(
 			"Incomplete Read",
@@ -149,7 +144,7 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Read(ctx context.Context,
 		return
 	}
 
-	device, err := macbaremetal.NewDeviceService(c.client).Get(ctx, int(state.DeviceID.ValueInt64()))
+	device, err := c.client.MacBareMetal.Device.Get(ctx, macbaremetal.DeviceGetReq{ID: uint(state.DeviceID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("device %d", state.DeviceID.ValueInt64()))
@@ -159,7 +154,7 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Read(ctx context.Context,
 		return
 	}
 
-	elasticIP, found, err := findMacBareMetalElasticIP(ctx, c.elasticIPService, int(state.ElasticIPID.ValueInt64()))
+	elasticIP, found, err := findMacBareMetalElasticIP(ctx, c.client.MacBareMetal.ElasticIP, int(state.ElasticIPID.ValueInt64()))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", err.Error())
 		return
@@ -193,7 +188,10 @@ func (c macBareMetalElasticIPDeviceAttachmentResource) Delete(ctx context.Contex
 	}
 
 	err := retryDelete(ctx, "detach elastic ip", func() error {
-		return macbaremetal.NewAttachedElasticIPService(c.client, int(state.DeviceID.ValueInt64())).Detach(ctx, int(state.ElasticIPID.ValueInt64()))
+		return c.client.MacBareMetal.ElasticIPAttachment.Delete(ctx, macbaremetal.ElasticIPAttachmentDeleteReq{
+			DeviceID:    uint(state.DeviceID.ValueInt64()),
+			ElasticIPID: uint(state.ElasticIPID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach elastic ip: %s", err))

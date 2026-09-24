@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/core"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -214,12 +214,10 @@ func (r *macBareMetalSecurityGroupRuleResource) Configure(ctx context.Context, r
 	}
 
 	r.client = client
-	r.securityGroupService = macbaremetal.NewSecurityGroupService(client)
 }
 
 type macBareMetalSecurityGroupRuleResource struct {
-	client               goclient.Client
-	securityGroupService macbaremetal.SecurityGroupService
+	client flowClient
 }
 
 func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -231,15 +229,16 @@ func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, reque
 	}
 
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
-	create := securityGroupRuleBody{
-		Direction: config.Direction.ValueString(),
-		Protocol:  config.Protocol.ToNumber(),
-		IPRange:   config.IPRange.ValueString(),
+	create := macbaremetal.SecurityGroupRuleCreateReq{
+		SecurityGroupID: uint(securityGroupID),
+		Direction:       config.Direction.ValueString(),
+		Protocol:        config.Protocol.ToNumber(),
+		IPRange:         nonZero(config.IPRange.ValueString()),
 	}
 
 	if config.PortRange != nil {
-		create.FromPort = int(config.PortRange.From.ValueInt64())
-		create.ToPort = int(config.PortRange.To.ValueInt64())
+		create.FromPort = nonZero(int(config.PortRange.From.ValueInt64()))
+		create.ToPort = nonZero(int(config.PortRange.To.ValueInt64()))
 	}
 
 	if config.ICMP != nil {
@@ -249,7 +248,7 @@ func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, reque
 
 	var rule macbaremetal.SecurityGroupRule
 	err := retryCreate(ctx, "create security group rule", func() (err error) {
-		rule, err = createMacBareMetalSecurityGroupRule(ctx, r.client, securityGroupID, create)
+		rule, err = r.client.MacBareMetal.SecurityGroupRule.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -275,7 +274,10 @@ func (r macBareMetalSecurityGroupRuleResource) Read(ctx context.Context, request
 	securityGroupID := int(state.SecurityGroupID.ValueInt64())
 	ruleID := int(state.ID.ValueInt64())
 
-	list, err := r.securityGroupService.Rules(securityGroupID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := r.client.MacBareMetal.SecurityGroupRule.List(ctx, macbaremetal.SecurityGroupRuleListReq{
+		SecurityGroupID: uint(securityGroupID),
+		Cursor:          core.CursorAll,
+	})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("security group %d", securityGroupID))
@@ -314,17 +316,18 @@ func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, reque
 	}
 
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
-	ruleID := int(state.ID.ValueInt64())
 
-	update := securityGroupRuleBody{
-		Direction: config.Direction.ValueString(),
-		Protocol:  config.Protocol.ToNumber(),
-		IPRange:   config.IPRange.ValueString(),
+	update := macbaremetal.SecurityGroupRuleUpdateReq{
+		SecurityGroupID:     uint(securityGroupID),
+		SecurityGroupRuleID: uint(state.ID.ValueInt64()),
+		Direction:           new(config.Direction.ValueString()),
+		Protocol:            new(config.Protocol.ToNumber()),
+		IPRange:             nonZero(config.IPRange.ValueString()),
 	}
 
 	if config.PortRange != nil {
-		update.FromPort = int(config.PortRange.From.ValueInt64())
-		update.ToPort = int(config.PortRange.To.ValueInt64())
+		update.FromPort = nonZero(int(config.PortRange.From.ValueInt64()))
+		update.ToPort = nonZero(int(config.PortRange.To.ValueInt64()))
 	}
 
 	if config.ICMP != nil {
@@ -334,7 +337,7 @@ func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, reque
 
 	var rule macbaremetal.SecurityGroupRule
 	err := retry(ctx, "update security group rule", func() (err error) {
-		rule, err = updateMacBareMetalSecurityGroupRule(ctx, r.client, securityGroupID, ruleID, update)
+		rule, err = r.client.MacBareMetal.SecurityGroupRule.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -356,11 +359,11 @@ func (r macBareMetalSecurityGroupRuleResource) Delete(ctx context.Context, reque
 		return
 	}
 
-	securityGroupID := int(state.SecurityGroupID.ValueInt64())
-	ruleID := int(state.ID.ValueInt64())
-
 	err := retryDelete(ctx, "delete security group rule", func() error {
-		return r.securityGroupService.Rules(securityGroupID).Delete(ctx, ruleID)
+		return r.client.MacBareMetal.SecurityGroupRule.Delete(ctx, macbaremetal.SecurityGroupRuleDeleteReq{
+			SecurityGroupID:     uint(state.SecurityGroupID.ValueInt64()),
+			SecurityGroupRuleID: uint(state.ID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group rule: %s", err))

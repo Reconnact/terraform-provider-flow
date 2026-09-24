@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -72,11 +72,11 @@ func (c *computeElasticIPResource) Configure(ctx context.Context, request resour
 		return
 	}
 
-	c.elasticIPService = compute.NewElasticIPService(client)
+	c.client = client
 }
 
 type computeElasticIPResource struct {
-	elasticIPService compute.ElasticIPService
+	client flowClient
 }
 
 func (c computeElasticIPResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -87,13 +87,13 @@ func (c computeElasticIPResource) Create(ctx context.Context, request resource.C
 		return
 	}
 
-	create := compute.ElasticIPCreate{
+	create := compute.ElasticIPCreateReq{
 		LocationID: int(config.LocationID.ValueInt64()),
 	}
 
 	var elasticIP compute.ElasticIP
 	err := retryCreate(ctx, "create elastic ip", func() (err error) {
-		elasticIP, err = c.elasticIPService.Create(ctx, create)
+		elasticIP, err = c.client.Compute.ElasticIP.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -121,7 +121,7 @@ func (c computeElasticIPResource) Read(ctx context.Context, request resource.Rea
 		return
 	}
 
-	elasticIP, found, err := findComputeElasticIP(ctx, c.elasticIPService, int(state.ID.ValueInt64()))
+	elasticIP, found, err := findComputeElasticIP(ctx, c.client.Compute.ElasticIP, int(state.ID.ValueInt64()))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", err.Error())
 		return
@@ -150,7 +150,7 @@ func (c computeElasticIPResource) Delete(ctx context.Context, request resource.D
 	}
 
 	err := retryDelete(ctx, "delete elastic ip", func() error {
-		return c.elasticIPService.Delete(ctx, int(state.ID.ValueInt64()))
+		return c.client.Compute.ElasticIP.Delete(ctx, compute.ElasticIPDeleteReq{ID: int(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete elastic ip: %s", err))
@@ -166,8 +166,8 @@ func (c computeElasticIPResource) ImportState(ctx context.Context, request resou
 	importStatePassthroughInt64ID(ctx, path.Root("id"), request, response)
 }
 
-func findComputeElasticIP(ctx context.Context, service compute.ElasticIPService, id int) (elasticIP compute.ElasticIP, found bool, err error) {
-	list, err := service.List(ctx, goclient.Cursor{NoFilter: 1})
+func findComputeElasticIP(ctx context.Context, service *compute.ElasticIPService, id int) (elasticIP compute.ElasticIP, found bool, err error) {
+	list, err := service.List(ctx, core.CursorAll)
 	if err != nil {
 		return elasticIP, false, fmt.Errorf("unable to list elastic ips: %w", err)
 	}

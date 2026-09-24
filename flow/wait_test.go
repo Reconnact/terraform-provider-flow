@@ -5,13 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -185,7 +186,7 @@ func TestWaitForGone(t *testing.T) {
 
 		start := time.Now()
 		if err := waitForGone(ctx, goneTimeout, "load balancer 1", func(ctx context.Context) error {
-			_, err := compute.NewLoadBalancerService(client).Get(ctx, 1)
+			_, err := client.Compute.LoadBalancer.Get(ctx, compute.LoadBalancerGetReq{ID: 1})
 			return err
 		}); err != nil {
 			t.Fatalf("waitForGone returned %s", err)
@@ -211,7 +212,7 @@ func TestWaitForGone(t *testing.T) {
 		})
 
 		if err := waitForGone(ctx, goneTimeout, "load balancer 1", func(ctx context.Context) error {
-			_, err := compute.NewLoadBalancerService(client).Get(ctx, 1)
+			_, err := client.Compute.LoadBalancer.Get(ctx, compute.LoadBalancerGetReq{ID: 1})
 			return err
 		}); err != nil {
 			t.Fatalf("waitForGone returned %s", err)
@@ -229,7 +230,7 @@ func TestWaitForGone(t *testing.T) {
 		})
 
 		err := waitForGone(ctx, 100*time.Millisecond, "load balancer 1", func(ctx context.Context) error {
-			_, err := compute.NewLoadBalancerService(client).Get(ctx, 1)
+			_, err := client.Compute.LoadBalancer.Get(ctx, compute.LoadBalancerGetReq{ID: 1})
 			return err
 		})
 		if err == nil {
@@ -241,7 +242,7 @@ func TestWaitForGone(t *testing.T) {
 	})
 }
 
-func fakeLoadBalancerAPI(t *testing.T, handle func(writer http.ResponseWriter)) goclient.Client {
+func fakeLoadBalancerAPI(t *testing.T, handle func(writer http.ResponseWriter)) flowClient {
 	t.Helper()
 
 	api := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -249,7 +250,12 @@ func fakeLoadBalancerAPI(t *testing.T, handle func(writer http.ResponseWriter)) 
 	}))
 	t.Cleanup(api.Close)
 
-	return goclient.NewClient(goclient.WithBase(api.URL), goclient.WithToken("test"))
+	base, err := url.Parse(api.URL)
+	if err != nil {
+		t.Fatalf("parsing the test server url: %s", err)
+	}
+
+	return newFlowClient(core.ClientOpts{BaseURL: base, HTTPClient: &http.Client{}, Token: "test"})
 }
 
 func notFound(writer http.ResponseWriter) {

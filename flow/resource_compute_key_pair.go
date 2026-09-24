@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -78,11 +78,11 @@ func (c *computeKeyPairResource) Configure(ctx context.Context, request resource
 		return
 	}
 
-	c.keyPairService = compute.NewKeyPairService(client)
+	c.client = client
 }
 
 type computeKeyPairResource struct {
-	keyPairService compute.KeyPairService
+	client flowClient
 }
 
 func (c computeKeyPairResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -93,14 +93,14 @@ func (c computeKeyPairResource) Create(ctx context.Context, request resource.Cre
 		return
 	}
 
-	create := compute.KeyPairCreate{
+	create := compute.KeyPairCreateReq{
 		Name:      config.Name.ValueString(),
 		PublicKey: config.PublicKey.ValueString(),
 	}
 
 	var keyPair compute.KeyPair
 	err := retryCreate(ctx, "create key pair", func() (err error) {
-		keyPair, err = c.keyPairService.Create(ctx, create)
+		keyPair, err = c.client.Compute.KeyPair.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -126,7 +126,7 @@ func (c computeKeyPairResource) Read(ctx context.Context, request resource.ReadR
 		return
 	}
 
-	list, err := c.keyPairService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.KeyPair.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list key pairs: %s", err))
 		return
@@ -158,7 +158,7 @@ func (c computeKeyPairResource) Delete(ctx context.Context, request resource.Del
 	}
 
 	err := retryDelete(ctx, "delete key pair", func() error {
-		return c.keyPairService.Delete(ctx, int(state.ID.ValueInt64()))
+		return c.client.Compute.KeyPair.Delete(ctx, compute.KeyPairDeleteReq{ID: uint(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete key pair: %s", err))

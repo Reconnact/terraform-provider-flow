@@ -6,11 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/common"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -28,10 +27,12 @@ func TestComputeServerCreateSendsWriteOnlyValues(t *testing.T) {
 	}))
 	defer api.Close()
 
-	client := goclient.NewClient(goclient.WithBase(api.URL), goclient.WithToken("test"))
+	base, err := url.Parse(api.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := &computeServerResource{
-		serverService: compute.NewServerService(client),
-		orderService:  common.NewOrderService(client),
+		client: newFlowClient(core.ClientOpts{BaseURL: base, HTTPClient: &http.Client{}, Token: "test"}),
 	}
 
 	var schemaResponse resource.SchemaResponse

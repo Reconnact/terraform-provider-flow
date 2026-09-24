@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -129,11 +129,11 @@ func (c *computeNetworkInterfaceResource) Configure(ctx context.Context, request
 		return
 	}
 
-	c.serverService = compute.NewServerService(client)
+	c.client = client
 }
 
 type computeNetworkInterfaceResource struct {
-	serverService compute.ServerService
+	client flowClient
 }
 
 func (c computeNetworkInterfaceResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -145,9 +145,10 @@ func (c computeNetworkInterfaceResource) Create(ctx context.Context, request res
 	}
 
 	serverID := int(config.ServerID.ValueInt64())
-	service := c.serverService.NetworkInterfaces(serverID)
+	service := c.client.Compute.NetworkInterface
 
-	create := compute.NetworkInterfaceCreate{
+	create := compute.NetworkInterfaceCreateReq{
+		ServerID:  uint(serverID),
 		NetworkID: int(config.NetworkID.ValueInt64()),
 		PrivateIP: config.PrivateIP.ValueString(),
 	}
@@ -165,15 +166,21 @@ func (c computeNetworkInterfaceResource) Create(ctx context.Context, request res
 	ifaceID := iface.ID
 
 	rollback := func(what string, err error) {
-		_ = retryDelete(ctx, "delete network interface", func() error { return service.Delete(ctx, ifaceID) })
+		_ = retryDelete(ctx, "delete network interface", func() error {
+			return service.Delete(ctx, compute.NetworkInterfaceDeleteReq{ServerID: uint(serverID), NetworkInterfaceID: uint(ifaceID)})
+		})
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("%s: %s", what, err))
 	}
 
 	if !config.Security.IsNull() && !config.Security.IsUnknown() && config.Security.ValueBool() != iface.Security {
-		update := compute.NetworkInterfaceSecurityUpdate{Security: config.Security.ValueBool()}
+		update := compute.NetworkInterfaceSecurityUpdateReq{
+			ServerID:           uint(serverID),
+			NetworkInterfaceID: uint(ifaceID),
+			Security:           config.Security.ValueBool(),
+		}
 
 		err = retry(ctx, "update network interface security", func() error {
-			updated, err := service.UpdateSecurity(ctx, ifaceID, update)
+			updated, err := service.UpdateSecurity(ctx, update)
 			if err != nil {
 				return err
 			}
@@ -187,10 +194,14 @@ func (c computeNetworkInterfaceResource) Create(ctx context.Context, request res
 	}
 
 	if !config.SecurityGroupIDs.IsNull() && !config.SecurityGroupIDs.IsUnknown() && !config.SecurityGroupIDs.Equal(securityGroupIDSet(iface)) {
-		update := compute.NetworkInterfaceSecurityGroupUpdate{SecurityGroupIDs: securityGroupIDs(config.SecurityGroupIDs)}
+		update := compute.NetworkInterfaceSecurityGroupUpdateReq{
+			ServerID:           uint(serverID),
+			NetworkInterfaceID: uint(ifaceID),
+			SecurityGroupIDs:   securityGroupIDs(config.SecurityGroupIDs),
+		}
 
 		err = retry(ctx, "update security groups", func() error {
-			updated, err := service.UpdateSecurityGroups(ctx, ifaceID, update)
+			updated, err := service.UpdateSecurityGroups(ctx, update)
 			if err != nil {
 				return err
 			}
@@ -220,7 +231,7 @@ func (c computeNetworkInterfaceResource) Read(ctx context.Context, request resou
 
 	serverID := int(state.ServerID.ValueInt64())
 
-	list, err := c.serverService.NetworkInterfaces(serverID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.NetworkInterface.List(ctx, compute.NetworkInterfaceListReq{ServerID: uint(serverID), Cursor: core.CursorAll})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("server %d", serverID))
@@ -263,14 +274,18 @@ func (c computeNetworkInterfaceResource) Update(ctx context.Context, request res
 
 	serverID := int(state.ServerID.ValueInt64())
 	ifaceID := int(state.ID.ValueInt64())
-	service := c.serverService.NetworkInterfaces(serverID)
+	service := c.client.Compute.NetworkInterface
 
 	if !plan.Security.IsUnknown() && plan.Security.ValueBool() != state.Security.ValueBool() {
-		update := compute.NetworkInterfaceSecurityUpdate{Security: plan.Security.ValueBool()}
+		update := compute.NetworkInterfaceSecurityUpdateReq{
+			ServerID:           uint(serverID),
+			NetworkInterfaceID: uint(ifaceID),
+			Security:           plan.Security.ValueBool(),
+		}
 
 		var iface compute.NetworkInterface
 		err := retry(ctx, "update network interface security", func() (err error) {
-			iface, err = service.UpdateSecurity(ctx, ifaceID, update)
+			iface, err = service.UpdateSecurity(ctx, update)
 			return err
 		})
 		if err != nil {
@@ -282,11 +297,15 @@ func (c computeNetworkInterfaceResource) Update(ctx context.Context, request res
 	}
 
 	if !plan.SecurityGroupIDs.IsUnknown() && !plan.SecurityGroupIDs.IsNull() && !plan.SecurityGroupIDs.Equal(state.SecurityGroupIDs) {
-		update := compute.NetworkInterfaceSecurityGroupUpdate{SecurityGroupIDs: securityGroupIDs(plan.SecurityGroupIDs)}
+		update := compute.NetworkInterfaceSecurityGroupUpdateReq{
+			ServerID:           uint(serverID),
+			NetworkInterfaceID: uint(ifaceID),
+			SecurityGroupIDs:   securityGroupIDs(plan.SecurityGroupIDs),
+		}
 
 		var iface compute.NetworkInterface
 		err := retry(ctx, "update security groups", func() (err error) {
-			iface, err = service.UpdateSecurityGroups(ctx, ifaceID, update)
+			iface, err = service.UpdateSecurityGroups(ctx, update)
 			return err
 		})
 		if err != nil {
@@ -313,7 +332,7 @@ func (c computeNetworkInterfaceResource) Delete(ctx context.Context, request res
 	ifaceID := int(state.ID.ValueInt64())
 
 	err := retryDelete(ctx, "delete network interface", func() error {
-		return c.serverService.NetworkInterfaces(serverID).Delete(ctx, ifaceID)
+		return c.client.Compute.NetworkInterface.Delete(ctx, compute.NetworkInterfaceDeleteReq{ServerID: uint(serverID), NetworkInterfaceID: uint(ifaceID)})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete network interface: %s", err))

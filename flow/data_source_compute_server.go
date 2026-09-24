@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -115,11 +115,11 @@ func (c *computeServerDataSource) Configure(ctx context.Context, request datasou
 		return
 	}
 
-	c.serverService = compute.NewServerService(client)
+	c.client = client
 }
 
 type computeServerDataSource struct {
-	serverService compute.ServerService
+	client flowClient
 }
 
 func (c computeServerDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -129,7 +129,7 @@ func (c computeServerDataSource) Read(ctx context.Context, request datasource.Re
 		return
 	}
 
-	servers, err := c.serverService.List(ctx, goclient.Cursor{NoFilter: 1})
+	servers, err := c.client.Compute.Server.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get server: %s", err))
 		return

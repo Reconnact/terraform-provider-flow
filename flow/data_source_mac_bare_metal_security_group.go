@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/core"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -82,11 +82,11 @@ func (c *macBareMetalSecurityGroupDataSource) Configure(ctx context.Context, req
 		return
 	}
 
-	c.securityGroupService = macbaremetal.NewSecurityGroupService(client)
+	c.client = client
 }
 
 type macBareMetalSecurityGroupDataSource struct {
-	securityGroupService macbaremetal.SecurityGroupService
+	client flowClient
 }
 
 func (c macBareMetalSecurityGroupDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -97,7 +97,7 @@ func (c macBareMetalSecurityGroupDataSource) Read(ctx context.Context, request d
 		return
 	}
 
-	list, err := c.securityGroupService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.MacBareMetal.SecurityGroup.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security groups: %s", err))
 		return

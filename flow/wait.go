@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flowswiss/goclient/common"
+	"github.com/flowswiss/goclient/v2/common"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -53,7 +53,7 @@ func remaining(ctx context.Context, fallback time.Duration) time.Duration {
 	return fallback
 }
 
-func waitForOrder(ctx context.Context, service common.OrderService, ordering common.Ordering) (common.Order, error) {
+func waitForOrder(ctx context.Context, service *common.OrderService, ordering common.Ordering) (common.Order, error) {
 	start := time.Now()
 
 	ctx, cancel := context.WithTimeout(ctx, remaining(ctx, orderTimeout))

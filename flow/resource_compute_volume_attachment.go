@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -78,7 +77,7 @@ func (r *computeVolumeAttachmentResource) Configure(ctx context.Context, request
 }
 
 type computeVolumeAttachmentResource struct {
-	client goclient.Client
+	client flowClient
 }
 
 func (r computeVolumeAttachmentResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -92,9 +91,7 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request res
 	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
 	defer cancel()
 
-	service := compute.NewVolumeService(r.client)
-
-	volume, err := service.Get(ctx, int(config.VolumeID.ValueInt64()))
+	volume, err := r.client.Compute.Volume.Get(ctx, compute.VolumeGetReq{ID: uint(config.VolumeID.ValueInt64())})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get volume: %s", err))
 		return
@@ -115,12 +112,13 @@ func (r computeVolumeAttachmentResource) Create(ctx context.Context, request res
 		return
 	}
 
-	attach := compute.VolumeAttach{
+	attach := compute.VolumeAttachReq{
+		VolumeID:   uint(config.VolumeID.ValueInt64()),
 		InstanceID: int(config.ServerID.ValueInt64()),
 	}
 
 	err = retry(ctx, "attach volume", func() (err error) {
-		volume, err = service.Attach(ctx, int(config.VolumeID.ValueInt64()), attach)
+		volume, err = r.client.Compute.Volume.Attach(ctx, attach)
 		return err
 	})
 	if err != nil {
@@ -152,7 +150,7 @@ func (r computeVolumeAttachmentResource) Read(ctx context.Context, request resou
 		return
 	}
 
-	volume, err := compute.NewVolumeService(r.client).Get(ctx, int(state.VolumeID.ValueInt64()))
+	volume, err := r.client.Compute.Volume.Get(ctx, compute.VolumeGetReq{ID: uint(state.VolumeID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("volume %d", state.VolumeID.ValueInt64()))
@@ -200,7 +198,10 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request res
 	defer cancel()
 
 	err := retryDelete(ctx, "detach volume", func() error {
-		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.ValueInt64()), int(state.ServerID.ValueInt64()))
+		return r.client.Compute.Volume.Detach(ctx, compute.VolumeDetachReq{
+			VolumeID:   uint(state.VolumeID.ValueInt64()),
+			InstanceID: uint(state.ServerID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach volume from current server: %s", err))
@@ -214,13 +215,14 @@ func (r computeVolumeAttachmentResource) Update(ctx context.Context, request res
 
 	tflog.Trace(ctx, "volume attachment: volume detached from previous server")
 
-	attach := compute.VolumeAttach{
+	attach := compute.VolumeAttachReq{
+		VolumeID:   uint(state.VolumeID.ValueInt64()),
 		InstanceID: int(plan.ServerID.ValueInt64()),
 	}
 
 	var volume compute.Volume
 	err = retry(ctx, "attach volume", func() (err error) {
-		volume, err = compute.NewVolumeService(r.client).Attach(ctx, int(state.VolumeID.ValueInt64()), attach)
+		volume, err = r.client.Compute.Volume.Attach(ctx, attach)
 		return err
 	})
 	if err != nil {
@@ -257,7 +259,10 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request res
 	defer cancel()
 
 	err := retryDelete(ctx, "detach volume", func() error {
-		return compute.NewVolumeService(r.client).Detach(ctx, int(state.VolumeID.ValueInt64()), int(state.ServerID.ValueInt64()))
+		return r.client.Compute.Volume.Detach(ctx, compute.VolumeDetachReq{
+			VolumeID:   uint(state.VolumeID.ValueInt64()),
+			InstanceID: uint(state.ServerID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach volume: %s", err))
@@ -272,7 +277,7 @@ func (r computeVolumeAttachmentResource) Delete(ctx context.Context, request res
 
 func (r computeVolumeAttachmentResource) waitForVolumeStatus(ctx context.Context, status string, volumeID, wantStatus int) (volume compute.Volume, err error) {
 	err = waitFor(ctx, volumeSettleTimeout, defaultWaitInterval, fmt.Sprintf("volume %d to be %s", volumeID, status), func(ctx context.Context) (bool, error) {
-		got, err := compute.NewVolumeService(r.client).Get(ctx, volumeID)
+		got, err := r.client.Compute.Volume.Get(ctx, compute.VolumeGetReq{ID: uint(volumeID)})
 		if err != nil {
 			if wantStatus == compute.VolumeStatusAvailable && isNotFound(err) {
 				return true, nil

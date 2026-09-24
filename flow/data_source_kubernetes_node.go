@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/kubernetes"
+	"github.com/flowswiss/goclient/v2/core"
+	"github.com/flowswiss/goclient/v2/kubernetes"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -150,11 +150,11 @@ func (k *kubernetesNodeDataSource) Configure(ctx context.Context, request dataso
 		return
 	}
 
-	k.clusterService = kubernetes.NewClusterService(client)
+	k.client = client
 }
 
 type kubernetesNodeDataSource struct {
-	clusterService kubernetes.ClusterService
+	client flowClient
 }
 
 func (k kubernetesNodeDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -167,7 +167,7 @@ func (k kubernetesNodeDataSource) Read(ctx context.Context, request datasource.R
 
 	clusterID := int(config.ClusterID.ValueInt64())
 
-	list, err := k.clusterService.Nodes(clusterID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := k.client.Kubernetes.Node.List(ctx, kubernetes.NodeListReq{ClusterID: uint(clusterID), Cursor: core.CursorAll})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list cluster nodes: %s", err))
 		return

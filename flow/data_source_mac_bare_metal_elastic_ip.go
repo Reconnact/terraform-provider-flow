@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/core"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -82,11 +82,11 @@ func (c *macBareMetalElasticIPDataSource) Configure(ctx context.Context, request
 		return
 	}
 
-	c.elasticIPService = macbaremetal.NewElasticIPService(client)
+	c.client = client
 }
 
 type macBareMetalElasticIPDataSource struct {
-	elasticIPService macbaremetal.ElasticIPService
+	client flowClient
 }
 
 func (c macBareMetalElasticIPDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -97,7 +97,7 @@ func (c macBareMetalElasticIPDataSource) Read(ctx context.Context, request datas
 		return
 	}
 
-	list, err := c.elasticIPService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.MacBareMetal.ElasticIP.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list elastic ips: %s", err))
 		return

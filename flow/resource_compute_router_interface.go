@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -90,7 +90,7 @@ func (c *computeRouterInterfaceResource) Configure(ctx context.Context, request 
 }
 
 type computeRouterInterfaceResource struct {
-	client goclient.Client
+	client flowClient
 }
 
 func (c computeRouterInterfaceResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -102,14 +102,15 @@ func (c computeRouterInterfaceResource) Create(ctx context.Context, request reso
 	}
 
 	routerID := int(config.RouterID.ValueInt64())
-	create := compute.RouterInterfaceCreate{
+	create := compute.RouterInterfaceCreateReq{
+		RouterID:  uint(routerID),
 		NetworkID: int(config.NetworkID.ValueInt64()),
 		PrivateIP: config.PrivateIP.ValueString(),
 	}
 
 	var routerInterface compute.RouterInterface
 	err := retryCreate(ctx, "create router interface", func() (err error) {
-		routerInterface, err = compute.NewRouterInterfaceService(c.client, routerID).Create(ctx, create)
+		routerInterface, err = c.client.Compute.RouterInterface.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -133,7 +134,10 @@ func (c computeRouterInterfaceResource) Read(ctx context.Context, request resour
 	}
 
 	routerID := int(state.RouterID.ValueInt64())
-	list, err := compute.NewRouterInterfaceService(c.client, routerID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.RouterInterface.List(ctx, compute.RouterInterfaceListReq{
+		RouterID: uint(routerID),
+		Cursor:   core.CursorAll,
+	})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("router %d", routerID))
@@ -168,9 +172,11 @@ func (c computeRouterInterfaceResource) Delete(ctx context.Context, request reso
 		return
 	}
 
-	routerID := int(state.RouterID.ValueInt64())
 	err := retryDelete(ctx, "delete router interface", func() error {
-		return compute.NewRouterInterfaceService(c.client, routerID).Delete(ctx, int(state.ID.ValueInt64()))
+		return c.client.Compute.RouterInterface.Delete(ctx, compute.RouterInterfaceDeleteReq{
+			RouterID:          uint(state.RouterID.ValueInt64()),
+			RouterInterfaceID: uint(state.ID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete router interface: %s", err))

@@ -3,10 +3,10 @@ package flow
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -260,12 +260,10 @@ func (c *computeLoadBalancerPoolResource) Configure(ctx context.Context, request
 	}
 
 	c.client = client
-	c.loadBalancerService = compute.NewLoadBalancerService(client)
 }
 
 type computeLoadBalancerPoolResource struct {
-	client              goclient.Client
-	loadBalancerService compute.LoadBalancerService
+	client flowClient
 }
 
 func (c computeLoadBalancerPoolResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -287,19 +285,20 @@ func (c computeLoadBalancerPoolResource) Create(ctx context.Context, request res
 
 	loadBalancerID := int(config.LoadBalancerID.ValueInt64())
 
-	create := compute.LoadBalancerPoolCreate{
+	create := compute.LoadBalancerPoolCreateReq{
+		LoadBalancerID:       uint(loadBalancerID),
 		EntryProtocolID:      int(config.EntryProtocolID.ValueInt64()),
 		TargetProtocolID:     int(config.TargetProtocolID.ValueInt64()),
-		CertificateID:        int(config.CertificateID.ValueInt64()),
+		CertificateID:        nonZero(int(config.CertificateID.ValueInt64())),
 		EntryPort:            int(config.EntryPort.ValueInt64()),
 		BalancingAlgorithmID: int(config.BalancingAlgorithmID.ValueInt64()),
 		StickySession:        config.StickySession.ValueBool(),
-		HealthCheck:          healthCheck,
+		HealthCheck:          &healthCheck,
 	}
 
 	var pool compute.LoadBalancerPool
 	err := retryCreate(ctx, "create load balancer pool", func() (err error) {
-		pool, err = c.loadBalancerService.Pools(loadBalancerID).Create(ctx, create)
+		pool, err = c.client.Compute.LoadBalancerPool.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -314,7 +313,7 @@ func (c computeLoadBalancerPoolResource) Create(ctx context.Context, request res
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
 
-	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
+	_, err = waitForLoadBalancerMutable(ctx, c.client.Compute.LoadBalancer, uint(loadBalancerID))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 	}
@@ -330,7 +329,10 @@ func (c computeLoadBalancerPoolResource) Read(ctx context.Context, request resou
 
 	loadBalancerID := int(state.LoadBalancerID.ValueInt64())
 
-	pool, err := c.loadBalancerService.Pools(loadBalancerID).Get(ctx, int(state.ID.ValueInt64()))
+	pool, err := c.client.Compute.LoadBalancerPool.Get(ctx, compute.LoadBalancerPoolGetReq{
+		LoadBalancerID:     uint(loadBalancerID),
+		LoadBalancerPoolID: uint(state.ID.ValueInt64()),
+	})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("load balancer pool %d", state.ID.ValueInt64()))
@@ -371,9 +373,10 @@ func (c computeLoadBalancerPoolResource) Update(ctx context.Context, request res
 	}
 
 	loadBalancerID := int(state.LoadBalancerID.ValueInt64())
-	poolID := int(state.ID.ValueInt64())
 
-	update := loadBalancerPoolUpdateBody{
+	update := compute.LoadBalancerPoolUpdateReq{
+		LoadBalancerID:       uint(loadBalancerID),
+		LoadBalancerPoolID:   uint(state.ID.ValueInt64()),
 		CertificateID:        intPointer(config.CertificateID),
 		BalancingAlgorithmID: intPointer(config.BalancingAlgorithmID),
 		StickySession:        boolPointer(config.StickySession),
@@ -385,7 +388,7 @@ func (c computeLoadBalancerPoolResource) Update(ctx context.Context, request res
 
 	var pool compute.LoadBalancerPool
 	err := retry(ctx, "update load balancer pool", func() (err error) {
-		pool, err = updateLoadBalancerPool(ctx, c.client, loadBalancerID, poolID, update)
+		pool, err = c.client.Compute.LoadBalancerPool.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -393,7 +396,7 @@ func (c computeLoadBalancerPoolResource) Update(ctx context.Context, request res
 		return
 	}
 
-	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
+	_, err = waitForLoadBalancerMutable(ctx, c.client.Compute.LoadBalancer, uint(loadBalancerID))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		return
@@ -417,18 +420,21 @@ func (c computeLoadBalancerPoolResource) Delete(ctx context.Context, request res
 	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
 	defer cancel()
 
-	loadBalancerID := int(state.LoadBalancerID.ValueInt64())
-	poolID := int(state.ID.ValueInt64())
+	loadBalancerID := uint(state.LoadBalancerID.ValueInt64())
+	poolID := uint(state.ID.ValueInt64())
 
 	err := retryDelete(ctx, "delete load balancer pool", func() error {
-		return c.loadBalancerService.Pools(loadBalancerID).Delete(ctx, poolID)
+		return c.client.Compute.LoadBalancerPool.Delete(ctx, compute.LoadBalancerPoolDeleteReq{
+			LoadBalancerID:     loadBalancerID,
+			LoadBalancerPoolID: poolID,
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete load balancer pool: %s", err))
 		return
 	}
 
-	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
+	_, err = waitForLoadBalancerMutable(ctx, c.client.Compute.LoadBalancer, loadBalancerID)
 	if err != nil && !isNotFound(err) {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		return
@@ -441,7 +447,7 @@ func sameHealthCheck(state *computeLoadBalancerHealthCheckResourceData, planned 
 	}
 
 	current, diagnostics := convertHealthCheckConfigToAPIOptions(*state)
-	return !diagnostics.HasError() && current == planned
+	return !diagnostics.HasError() && reflect.DeepEqual(current, planned)
 }
 
 func convertHealthCheckConfigToAPIOptions(config computeLoadBalancerHealthCheckResourceData) (options compute.LoadBalancerHealthCheckOptions, diagnostics diag.Diagnostics) {
@@ -470,15 +476,15 @@ func convertHealthCheckConfigToAPIOptions(config computeLoadBalancerHealthCheckR
 
 	options = compute.LoadBalancerHealthCheckOptions{
 		TypeID:             int(config.TypeID.ValueInt64()),
-		Interval:           healthCheckIntervalSeconds,
-		Timeout:            healthCheckTimeoutSeconds,
-		HealthyThreshold:   int(config.HealthyThreshold.ValueInt64()),
-		UnhealthyThreshold: int(config.UnhealthyThreshold.ValueInt64()),
+		Interval:           nonZero(healthCheckIntervalSeconds),
+		Timeout:            nonZero(healthCheckTimeoutSeconds),
+		HealthyThreshold:   nonZero(int(config.HealthyThreshold.ValueInt64())),
+		UnhealthyThreshold: nonZero(int(config.UnhealthyThreshold.ValueInt64())),
 	}
 
 	if config.HTTP != nil {
-		options.HTTPMethod = config.HTTP.Method.ValueString()
-		options.HTTPPath = config.HTTP.Path.ValueString()
+		options.HTTPMethod = nonZero(config.HTTP.Method.ValueString())
+		options.HTTPPath = nonZero(config.HTTP.Path.ValueString())
 	}
 
 	return

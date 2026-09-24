@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -136,11 +136,11 @@ func (c *computeNetworkResource) Configure(ctx context.Context, request resource
 		return
 	}
 
-	c.networkService = compute.NewNetworkService(client)
+	c.client = client
 }
 
 type computeNetworkResource struct {
-	networkService compute.NetworkService
+	client flowClient
 }
 
 func (c computeNetworkResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -151,14 +151,14 @@ func (c computeNetworkResource) Create(ctx context.Context, request resource.Cre
 		return
 	}
 
-	create := compute.NetworkCreate{
-		Name:       config.Name.ValueString(),
-		LocationID: int(config.LocationID.ValueInt64()),
-		CIDR:       config.CIDR.ValueString(),
+	create := compute.NetworkCreateReq{
+		Name:       nonZero(config.Name.ValueString()),
+		LocationID: nonZero(int(config.LocationID.ValueInt64())),
+		CIDR:       nonZero(config.CIDR.ValueString()),
 		DomainNameServers: []string{
 			"1.1.1.1", "8.8.8.8",
 		},
-		GatewayIP: config.GatewayIP.ValueString(),
+		GatewayIP: nonZero(config.GatewayIP.ValueString()),
 	}
 
 	if len(config.DomainNameServers) != 0 {
@@ -169,13 +169,13 @@ func (c computeNetworkResource) Create(ctx context.Context, request resource.Cre
 	}
 
 	if config.AllocationPool != nil {
-		create.AllocationPoolStart = config.AllocationPool.Start.ValueString()
-		create.AllocationPoolEnd = config.AllocationPool.End.ValueString()
+		create.AllocationPoolStart = nonZero(config.AllocationPool.Start.ValueString())
+		create.AllocationPoolEnd = nonZero(config.AllocationPool.End.ValueString())
 	}
 
 	var network compute.Network
 	err := retryCreate(ctx, "create network", func() (err error) {
-		network, err = c.networkService.Create(ctx, create)
+		network, err = c.client.Compute.Network.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -198,7 +198,7 @@ func (c computeNetworkResource) Read(ctx context.Context, request resource.ReadR
 		return
 	}
 
-	network, err := c.networkService.Get(ctx, int(state.ID.ValueInt64()))
+	network, err := c.client.Compute.Network.Get(ctx, compute.NetworkGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("network %d", state.ID.ValueInt64()))
@@ -229,9 +229,10 @@ func (c computeNetworkResource) Update(ctx context.Context, request resource.Upd
 		return
 	}
 
-	update := compute.NetworkUpdate{
-		Name:      config.Name.ValueString(),
-		GatewayIP: config.GatewayIP.ValueString(),
+	update := compute.NetworkUpdateReq{
+		ID:        uint(state.ID.ValueInt64()),
+		Name:      nonZero(config.Name.ValueString()),
+		GatewayIP: nonZero(config.GatewayIP.ValueString()),
 	}
 
 	if len(config.DomainNameServers) != 0 {
@@ -242,13 +243,13 @@ func (c computeNetworkResource) Update(ctx context.Context, request resource.Upd
 	}
 
 	if config.AllocationPool != nil {
-		update.AllocationPoolStart = config.AllocationPool.Start.ValueString()
-		update.AllocationPoolEnd = config.AllocationPool.End.ValueString()
+		update.AllocationPoolStart = nonZero(config.AllocationPool.Start.ValueString())
+		update.AllocationPoolEnd = nonZero(config.AllocationPool.End.ValueString())
 	}
 
 	var network compute.Network
 	err := retry(ctx, "update network", func() (err error) {
-		network, err = c.networkService.Update(ctx, int(state.ID.ValueInt64()), update)
+		network, err = c.client.Compute.Network.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -271,7 +272,7 @@ func (c computeNetworkResource) Delete(ctx context.Context, request resource.Del
 	}
 
 	err := retryDelete(ctx, "delete network", func() error {
-		return c.networkService.Delete(ctx, int(state.ID.ValueInt64()))
+		return c.client.Compute.Network.Delete(ctx, compute.NetworkDeleteReq{ID: uint(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete network: %s", err))

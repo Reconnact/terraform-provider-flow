@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -97,11 +97,11 @@ func (r *computeSnapshotResource) Configure(ctx context.Context, request resourc
 		return
 	}
 
-	r.snapshotService = compute.NewSnapshotService(client)
+	r.client = client
 }
 
 type computeSnapshotResource struct {
-	snapshotService compute.SnapshotService
+	client flowClient
 }
 
 func (r computeSnapshotResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -115,14 +115,14 @@ func (r computeSnapshotResource) Create(ctx context.Context, request resource.Cr
 	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
 	defer cancel()
 
-	create := compute.SnapshotCreate{
+	create := compute.SnapshotCreateReq{
 		Name:     config.Name.ValueString(),
 		VolumeID: int(config.VolumeID.ValueInt64()),
 	}
 
 	var snapshot compute.Snapshot
 	err := retryCreate(ctx, "create snapshot", func() (err error) {
-		snapshot, err = r.snapshotService.Create(ctx, create)
+		snapshot, err = r.client.Compute.Snapshot.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -159,7 +159,7 @@ func (r computeSnapshotResource) Read(ctx context.Context, request resource.Read
 		return
 	}
 
-	snapshot, err := r.snapshotService.Get(ctx, int(state.ID.ValueInt64()))
+	snapshot, err := r.client.Compute.Snapshot.Get(ctx, compute.SnapshotGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("snapshot %d", state.ID.ValueInt64()))
@@ -202,13 +202,14 @@ func (r computeSnapshotResource) Update(ctx context.Context, request resource.Up
 		"requested_name": config.Name,
 	})
 
-	update := compute.SnapshotUpdate{
-		Name: config.Name.ValueString(),
+	update := compute.SnapshotUpdateReq{
+		ID:   uint(state.ID.ValueInt64()),
+		Name: nonZero(config.Name.ValueString()),
 	}
 
 	var snapshot compute.Snapshot
 	err := retry(ctx, "update snapshot", func() (err error) {
-		snapshot, err = r.snapshotService.Update(ctx, int(state.ID.ValueInt64()), update)
+		snapshot, err = r.client.Compute.Snapshot.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -237,7 +238,7 @@ func (r computeSnapshotResource) Delete(ctx context.Context, request resource.De
 	snapshotID := int(state.ID.ValueInt64())
 
 	err := retryDelete(ctx, "delete snapshot", func() error {
-		return r.snapshotService.Delete(ctx, snapshotID)
+		return r.client.Compute.Snapshot.Delete(ctx, compute.SnapshotDeleteReq{ID: uint(snapshotID)})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete snapshot: %s", err))
@@ -245,7 +246,7 @@ func (r computeSnapshotResource) Delete(ctx context.Context, request resource.De
 	}
 
 	err = waitForGone(ctx, goneTimeout, fmt.Sprintf("snapshot %d", snapshotID), func(ctx context.Context) error {
-		_, err := r.snapshotService.Get(ctx, snapshotID)
+		_, err := r.client.Compute.Snapshot.Get(ctx, compute.SnapshotGetReq{ID: uint(snapshotID)})
 		return err
 	})
 	if err != nil {
@@ -260,7 +261,7 @@ func (r computeSnapshotResource) ImportState(ctx context.Context, request resour
 
 func (r computeSnapshotResource) waitForSnapshotAvailable(ctx context.Context, snapshotID int) (snapshot compute.Snapshot, err error) {
 	err = waitFor(ctx, snapshotTimeout, defaultWaitInterval, fmt.Sprintf("snapshot %d to be available", snapshotID), func(ctx context.Context) (bool, error) {
-		got, err := r.snapshotService.Get(ctx, snapshotID)
+		got, err := r.client.Compute.Snapshot.Get(ctx, compute.SnapshotGetReq{ID: uint(snapshotID)})
 		if err != nil {
 			return false, err
 		}

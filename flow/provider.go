@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 
-	"github.com/flowswiss/goclient"
+	"github.com/flowswiss/goclient/v2"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -118,6 +120,16 @@ func (p *flowProvider) Configure(ctx context.Context, request provider.Configure
 		}
 	}
 
+	endpoint, err := url.Parse(data.Endpoint.ValueString())
+	if err != nil {
+		response.Diagnostics.AddAttributeError(
+			path.Root("endpoint"),
+			"Invalid Endpoint",
+			err.Error(),
+		)
+		return
+	}
+
 	if data.RetryTimeout.IsNull() {
 		if val, ok := os.LookupEnv("FLOW_RETRY_TIMEOUT"); ok {
 			data.RetryTimeout = types.StringValue(val)
@@ -143,13 +155,12 @@ func (p *flowProvider) Configure(ctx context.Context, request provider.Configure
 		"retry_timeout": defaultRetryPolicy.Timeout.String(),
 	})
 
-	client := goclient.NewClient(
-		goclient.WithToken(data.Token.ValueString()),
-		goclient.WithBase(data.Endpoint.ValueString()),
-		goclient.WithUserAgent(fmt.Sprintf("terraform-provider-flow/%s", p.version)),
-
-		goclient.WithHTTPClientOption(installTransport),
-	)
+	client := newFlowClient(core.ClientOpts{
+		BaseURL:    endpoint,
+		HTTPClient: newHTTPClient(),
+		UserAgent:  fmt.Sprintf("terraform-provider-flow/%s", p.version),
+		Token:      data.Token.ValueString(),
+	})
 
 	response.ResourceData = client
 	response.DataSourceData = client
@@ -227,18 +238,18 @@ func (p *flowProvider) DataSources(ctx context.Context) []func() datasource.Data
 	}
 }
 
-func clientFromProviderData(data any, diagnostics *diag.Diagnostics) (goclient.Client, bool) {
+func clientFromProviderData(data any, diagnostics *diag.Diagnostics) (flowClient, bool) {
 	if data == nil {
-		return goclient.Client{}, false
+		return flowClient{}, false
 	}
 
-	client, ok := data.(goclient.Client)
+	client, ok := data.(flowClient)
 	if !ok {
 		diagnostics.AddError(
 			"Unexpected Provider Data Type",
 			fmt.Sprintf("While configuring the data source or resource, an unexpected provider data type (%T) was received. This is always a bug in the provider code and should be reported to the provider developers.", data),
 		)
-		return goclient.Client{}, false
+		return flowClient{}, false
 	}
 
 	return client, true
@@ -277,19 +288,19 @@ func (l logTransport) transport() http.RoundTripper {
 	return l.base
 }
 
-func installTransport(c *http.Client) {
+type flowClient struct {
+	*goclient.Client
+	raw *core.Client
+}
+
+func newFlowClient(opts core.ClientOpts) flowClient {
+	raw := core.NewClient(opts)
+	return flowClient{Client: goclient.WithClient(raw), raw: raw}
+}
+
+func newHTTPClient() *http.Client {
 	base := http.DefaultTransport.(*http.Transport).Clone()
 	base.ResponseHeaderTimeout = responseHeaderTimeout
 
-	var inner http.RoundTripper = base
-	switch t := c.Transport.(type) {
-	case goclient.AuthTransport:
-		t.Base = base
-		inner = t
-	case nil:
-	default:
-		inner = t
-	}
-
-	c.Transport = readRetryTransport{base: logTransport{base: inner}}
+	return &http.Client{Transport: readRetryTransport{base: logTransport{base: base}}}
 }

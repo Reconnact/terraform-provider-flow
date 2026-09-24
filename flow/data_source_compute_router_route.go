@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -92,7 +92,7 @@ func (c *computeRouterRouteDataSource) Configure(ctx context.Context, request da
 }
 
 type computeRouterRouteDataSource struct {
-	client goclient.Client
+	client flowClient
 }
 
 func (c computeRouterRouteDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -104,7 +104,7 @@ func (c computeRouterRouteDataSource) Read(ctx context.Context, request datasour
 	}
 
 	routerID := int(config.RouterID.ValueInt64())
-	list, err := compute.NewRouteService(c.client, routerID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.Route.List(ctx, compute.RouteListReq{RouterID: uint(routerID), Cursor: core.CursorAll})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list routes: %s", err))
 		return

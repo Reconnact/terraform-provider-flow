@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/core"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -130,11 +130,11 @@ func (c *macBareMetalNetworkDataSource) Configure(ctx context.Context, request d
 		return
 	}
 
-	c.networkService = macbaremetal.NewNetworkService(client)
+	c.client = client
 }
 
 type macBareMetalNetworkDataSource struct {
-	networkService macbaremetal.NetworkService
+	client flowClient
 }
 
 func (c macBareMetalNetworkDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -145,7 +145,7 @@ func (c macBareMetalNetworkDataSource) Read(ctx context.Context, request datasou
 		return
 	}
 
-	list, err := c.networkService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.MacBareMetal.Network.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list networks: %s", err))
 		return

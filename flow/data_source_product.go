@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/common"
+	"github.com/flowswiss/goclient/v2/common"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -80,11 +80,11 @@ func (p *productDataSource) Configure(ctx context.Context, request datasource.Co
 		return
 	}
 
-	p.productService = common.NewProductService(client)
+	p.client = client
 }
 
 type productDataSource struct {
-	productService common.ProductService
+	client flowClient
 }
 
 func (p productDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -95,7 +95,7 @@ func (p productDataSource) Read(ctx context.Context, request datasource.ReadRequ
 		return
 	}
 
-	list, err := p.productService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := p.client.Common.Product.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get products: %s", err))
 		return

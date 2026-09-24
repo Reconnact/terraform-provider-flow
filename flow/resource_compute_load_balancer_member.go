@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -130,11 +130,11 @@ func (c *computeLoadBalancerMemberResource) Configure(ctx context.Context, reque
 		return
 	}
 
-	c.loadBalancerService = compute.NewLoadBalancerService(client)
+	c.client = client
 }
 
 type computeLoadBalancerMemberResource struct {
-	loadBalancerService compute.LoadBalancerService
+	client flowClient
 }
 
 func (c computeLoadBalancerMemberResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -151,15 +151,17 @@ func (c computeLoadBalancerMemberResource) Create(ctx context.Context, request r
 	loadBalancerID := int(config.LoadBalancerID.ValueInt64())
 	poolID := int(config.PoolID.ValueInt64())
 
-	create := compute.LoadBalancerMemberCreate{
-		Name:    config.Name.ValueString(),
-		Address: config.Address.ValueString(),
-		Port:    int(config.Port.ValueInt64()),
+	create := compute.LoadBalancerMemberCreateReq{
+		LoadBalancerID:     uint(loadBalancerID),
+		LoadBalancerPoolID: uint(poolID),
+		Name:               config.Name.ValueString(),
+		Address:            config.Address.ValueString(),
+		Port:               int(config.Port.ValueInt64()),
 	}
 
 	var member compute.LoadBalancerMember
 	err := retryCreate(ctx, "create load balancer member", func() (err error) {
-		member, err = c.loadBalancerService.Pools(loadBalancerID).Members(poolID).Create(ctx, create)
+		member, err = c.client.Compute.LoadBalancerMember.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -174,7 +176,7 @@ func (c computeLoadBalancerMemberResource) Create(ctx context.Context, request r
 	diagnostics = response.State.Set(ctx, state)
 	response.Diagnostics.Append(diagnostics...)
 
-	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
+	_, err = waitForLoadBalancerMutable(ctx, c.client.Compute.LoadBalancer, uint(loadBalancerID))
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 	}
@@ -191,7 +193,11 @@ func (c computeLoadBalancerMemberResource) Read(ctx context.Context, request res
 	loadBalancerID := int(state.LoadBalancerID.ValueInt64())
 	poolID := int(state.PoolID.ValueInt64())
 
-	list, err := c.loadBalancerService.Pools(loadBalancerID).Members(poolID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.LoadBalancerMember.List(ctx, compute.LoadBalancerMemberListReq{
+		LoadBalancerID:     uint(loadBalancerID),
+		LoadBalancerPoolID: uint(poolID),
+		Cursor:             core.CursorAll,
+	})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("load balancer %d pool %d", loadBalancerID, poolID))
@@ -232,19 +238,21 @@ func (c computeLoadBalancerMemberResource) Delete(ctx context.Context, request r
 	ctx, cancel := withTimeout(ctx, state.Timeouts.Delete, &response.Diagnostics)
 	defer cancel()
 
-	loadBalancerID := int(state.LoadBalancerID.ValueInt64())
-	poolID := int(state.PoolID.ValueInt64())
-	memberID := int(state.ID.ValueInt64())
+	loadBalancerID := uint(state.LoadBalancerID.ValueInt64())
 
 	err := retryDelete(ctx, "delete load balancer member", func() error {
-		return c.loadBalancerService.Pools(loadBalancerID).Members(poolID).Delete(ctx, memberID)
+		return c.client.Compute.LoadBalancerMember.Delete(ctx, compute.LoadBalancerMemberDeleteReq{
+			LoadBalancerID:       loadBalancerID,
+			LoadBalancerPoolID:   uint(state.PoolID.ValueInt64()),
+			LoadBalancerMemberID: uint(state.ID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete load balancer member: %s", err))
 		return
 	}
 
-	_, err = waitForLoadBalancerMutable(ctx, c.loadBalancerService, loadBalancerID)
+	_, err = waitForLoadBalancerMutable(ctx, c.client.Compute.LoadBalancer, loadBalancerID)
 	if err != nil && !isNotFound(err) {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for load balancer to be mutable: %s", err))
 		return

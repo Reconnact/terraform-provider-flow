@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -126,12 +125,10 @@ func (c *computeRouterResource) Configure(ctx context.Context, request resource.
 	}
 
 	c.client = client
-	c.routerService = compute.NewRouterService(client)
 }
 
 type computeRouterResource struct {
-	client        goclient.Client
-	routerService compute.RouterService
+	client flowClient
 }
 
 func (c computeRouterResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -142,7 +139,7 @@ func (c computeRouterResource) Create(ctx context.Context, request resource.Crea
 		return
 	}
 
-	create := compute.RouterCreate{
+	create := compute.RouterCreateReq{
 		Name:       config.Name.ValueString(),
 		LocationID: int(config.LocationID.ValueInt64()),
 		Public:     true,
@@ -154,7 +151,7 @@ func (c computeRouterResource) Create(ctx context.Context, request resource.Crea
 
 	var router compute.Router
 	err := retryCreate(ctx, "create router", func() (err error) {
-		router, err = c.routerService.Create(ctx, create)
+		router, err = c.client.Compute.Router.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -177,7 +174,7 @@ func (c computeRouterResource) Read(ctx context.Context, request resource.ReadRe
 		return
 	}
 
-	router, err := c.routerService.Get(ctx, int(state.ID.ValueInt64()))
+	router, err := c.client.Compute.Router.Get(ctx, compute.RouterGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("router %d", state.ID.ValueInt64()))
@@ -208,14 +205,15 @@ func (c computeRouterResource) Update(ctx context.Context, request resource.Upda
 		return
 	}
 
-	update := routerUpdateBody{
-		Name:   config.Name.ValueString(),
+	update := compute.RouterUpdateReq{
+		ID:     uint(state.ID.ValueInt64()),
+		Name:   nonZero(config.Name.ValueString()),
 		Public: boolPointer(config.Public),
 	}
 
 	var router compute.Router
 	err := retry(ctx, "update router", func() (err error) {
-		router, err = updateRouter(ctx, c.client, int(state.ID.ValueInt64()), update)
+		router, err = c.client.Compute.Router.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -238,7 +236,7 @@ func (c computeRouterResource) Delete(ctx context.Context, request resource.Dele
 	}
 
 	err := retryDelete(ctx, "delete router", func() error {
-		return c.routerService.Delete(ctx, int(state.ID.ValueInt64()))
+		return c.client.Compute.Router.Delete(ctx, compute.RouterDeleteReq{ID: uint(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete router: %s", err))

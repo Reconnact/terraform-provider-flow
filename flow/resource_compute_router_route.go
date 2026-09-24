@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -89,7 +89,7 @@ func (c *computeRouterRouteResource) Configure(ctx context.Context, request reso
 }
 
 type computeRouterRouteResource struct {
-	client goclient.Client
+	client flowClient
 }
 
 func (c computeRouterRouteResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -101,14 +101,15 @@ func (c computeRouterRouteResource) Create(ctx context.Context, request resource
 	}
 
 	routerID := int(config.RouterID.ValueInt64())
-	create := compute.RouteCreate{
+	create := compute.RouteCreateReq{
+		RouterID:    uint(routerID),
 		Destination: config.Destination.ValueString(),
 		NextHop:     config.NextHop.ValueString(),
 	}
 
 	var route compute.Route
 	err := retryCreate(ctx, "create route", func() (err error) {
-		route, err = compute.NewRouteService(c.client, routerID).Create(ctx, create)
+		route, err = c.client.Compute.Route.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -133,7 +134,10 @@ func (c computeRouterRouteResource) Read(ctx context.Context, request resource.R
 
 	routerID := int(state.RouterID.ValueInt64())
 
-	list, err := compute.NewRouteService(c.client, routerID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.Route.List(ctx, compute.RouteListReq{
+		RouterID: uint(routerID),
+		Cursor:   core.CursorAll,
+	})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("router %d", routerID))
@@ -168,9 +172,11 @@ func (c computeRouterRouteResource) Delete(ctx context.Context, request resource
 		return
 	}
 
-	routerID := int(state.RouterID.ValueInt64())
 	err := retryDelete(ctx, "delete route", func() error {
-		return compute.NewRouteService(c.client, routerID).Delete(ctx, int(state.ID.ValueInt64()))
+		return c.client.Compute.Route.Delete(ctx, compute.RouteDeleteReq{
+			RouterID: uint(state.RouterID.ValueInt64()),
+			RouteID:  uint(state.ID.ValueInt64()),
+		})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete route: %s", err))

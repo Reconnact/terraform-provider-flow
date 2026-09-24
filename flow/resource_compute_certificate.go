@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/compute"
+	"github.com/flowswiss/goclient/v2/compute"
+	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -187,11 +187,11 @@ func (c *computeCertificateResource) Configure(ctx context.Context, request reso
 		return
 	}
 
-	c.certificateService = compute.NewCertificateService(client)
+	c.client = client
 }
 
 type computeCertificateResource struct {
-	certificateService compute.CertificateService
+	client flowClient
 }
 
 func (c computeCertificateResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -202,7 +202,7 @@ func (c computeCertificateResource) Create(ctx context.Context, request resource
 		return
 	}
 
-	create := compute.CertificateCreate{
+	create := compute.CertificateCreateReq{
 		Name:        config.Name.ValueString(),
 		LocationID:  int(config.LocationID.ValueInt64()),
 		Certificate: config.Certificate.ValueString(),
@@ -211,7 +211,7 @@ func (c computeCertificateResource) Create(ctx context.Context, request resource
 
 	var certificate compute.Certificate
 	err := retryCreate(ctx, "create certificate", func() (err error) {
-		certificate, err = c.certificateService.Create(ctx, create)
+		certificate, err = c.client.Compute.Certificate.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -234,7 +234,7 @@ func (c computeCertificateResource) Read(ctx context.Context, request resource.R
 		return
 	}
 
-	list, err := c.certificateService.List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.Compute.Certificate.List(ctx, core.CursorAll)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list certificates: %s", err))
 		return
@@ -266,7 +266,7 @@ func (c computeCertificateResource) Delete(ctx context.Context, request resource
 	}
 
 	err := retryDelete(ctx, "delete certificate", func() error {
-		return c.certificateService.Delete(ctx, int(state.ID.ValueInt64()))
+		return c.client.Compute.Certificate.Delete(ctx, compute.CertificateDeleteReq{ID: uint(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete certificate: %s", err))

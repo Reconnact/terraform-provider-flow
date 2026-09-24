@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/kubernetes"
+	"github.com/flowswiss/goclient/v2/core"
+	"github.com/flowswiss/goclient/v2/kubernetes"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -110,11 +110,11 @@ func (k *kubernetesVolumeDataSource) Configure(ctx context.Context, request data
 		return
 	}
 
-	k.clusterService = kubernetes.NewClusterService(client)
+	k.client = client
 }
 
 type kubernetesVolumeDataSource struct {
-	clusterService kubernetes.ClusterService
+	client flowClient
 }
 
 func (k kubernetesVolumeDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -127,7 +127,7 @@ func (k kubernetesVolumeDataSource) Read(ctx context.Context, request datasource
 
 	clusterID := int(config.ClusterID.ValueInt64())
 
-	list, err := k.clusterService.Volumes(clusterID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := k.client.Kubernetes.Volume.List(ctx, kubernetes.VolumeListReq{ClusterID: uint(clusterID), Cursor: core.CursorAll})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list cluster volumes: %s", err))
 		return

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -70,11 +70,11 @@ func (r *macBareMetalSecurityGroupResource) Configure(ctx context.Context, reque
 		return
 	}
 
-	r.securityGroupService = macbaremetal.NewSecurityGroupService(client)
+	r.client = client
 }
 
 type macBareMetalSecurityGroupResource struct {
-	securityGroupService macbaremetal.SecurityGroupService
+	client flowClient
 }
 
 func (r macBareMetalSecurityGroupResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -85,7 +85,7 @@ func (r macBareMetalSecurityGroupResource) Create(ctx context.Context, request r
 		return
 	}
 
-	create := macbaremetal.SecurityGroupCreate{
+	create := macbaremetal.SecurityGroupCreateReq{
 		Name:        config.Name.ValueString(),
 		Description: "a security group created by terraform",
 		NetworkID:   int(config.NetworkID.ValueInt64()),
@@ -93,7 +93,7 @@ func (r macBareMetalSecurityGroupResource) Create(ctx context.Context, request r
 
 	var securityGroup macbaremetal.SecurityGroup
 	err := retryCreate(ctx, "create security group", func() (err error) {
-		securityGroup, err = r.securityGroupService.Create(ctx, create)
+		securityGroup, err = r.client.MacBareMetal.SecurityGroup.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -116,7 +116,7 @@ func (r macBareMetalSecurityGroupResource) Read(ctx context.Context, request res
 		return
 	}
 
-	securityGroup, err := r.securityGroupService.Get(ctx, int(state.ID.ValueInt64()))
+	securityGroup, err := r.client.MacBareMetal.SecurityGroup.Get(ctx, macbaremetal.SecurityGroupGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("security group %d", state.ID.ValueInt64()))
@@ -147,20 +147,21 @@ func (r macBareMetalSecurityGroupResource) Update(ctx context.Context, request r
 		return
 	}
 
-	current, err := r.securityGroupService.Get(ctx, int(state.ID.ValueInt64()))
+	current, err := r.client.MacBareMetal.SecurityGroup.Get(ctx, macbaremetal.SecurityGroupGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get security group: %s", err))
 		return
 	}
 
-	update := macbaremetal.SecurityGroupUpdate{
-		Name:        config.Name.ValueString(),
-		Description: current.Description,
+	update := macbaremetal.SecurityGroupUpdateReq{
+		ID:          uint(state.ID.ValueInt64()),
+		Name:        new(config.Name.ValueString()),
+		Description: new(current.Description),
 	}
 
 	var securityGroup macbaremetal.SecurityGroup
 	err = retry(ctx, "update security group", func() (err error) {
-		securityGroup, err = r.securityGroupService.Update(ctx, int(state.ID.ValueInt64()), update)
+		securityGroup, err = r.client.MacBareMetal.SecurityGroup.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -183,7 +184,7 @@ func (r macBareMetalSecurityGroupResource) Delete(ctx context.Context, request r
 	}
 
 	err := retryDelete(ctx, "delete security group", func() error {
-		return r.securityGroupService.Delete(ctx, int(state.ID.ValueInt64()))
+		return r.client.MacBareMetal.SecurityGroup.Delete(ctx, macbaremetal.SecurityGroupDeleteReq{ID: uint(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group: %s", err))

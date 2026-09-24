@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient/common"
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/common"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -118,13 +118,11 @@ func (m *macBareMetalDeviceResource) Configure(ctx context.Context, request reso
 		return
 	}
 
-	m.orderService = common.NewOrderService(client)
-	m.deviceService = macbaremetal.NewDeviceService(client)
+	m.client = client
 }
 
 type macBareMetalDeviceResource struct {
-	orderService  common.OrderService
-	deviceService macbaremetal.DeviceService
+	client flowClient
 }
 
 func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -138,7 +136,7 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource
 	ctx, cancel := withTimeout(ctx, config.Timeouts.Create, &response.Diagnostics)
 	defer cancel()
 
-	create := macbaremetal.DeviceCreate{
+	create := macbaremetal.DeviceCreateReq{
 		Name:            config.Name.ValueString(),
 		LocationID:      int(config.LocationID.ValueInt64()),
 		ProductID:       int(config.ProductID.ValueInt64()),
@@ -149,7 +147,7 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource
 
 	var ordering common.Ordering
 	err := retryCreate(ctx, "create device", func() (err error) {
-		ordering, err = m.deviceService.Create(ctx, create)
+		ordering, err = m.client.MacBareMetal.Device.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -157,13 +155,13 @@ func (m macBareMetalDeviceResource) Create(ctx context.Context, request resource
 		return
 	}
 
-	order, err := waitForOrder(ctx, m.orderService, ordering)
+	order, err := waitForOrder(ctx, m.client.Common.Order, ordering)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("waiting for device creation: %s", err))
 		return
 	}
 
-	device, err := m.deviceService.Get(ctx, order.Product.ID)
+	device, err := m.client.MacBareMetal.Device.Get(ctx, macbaremetal.DeviceGetReq{ID: uint(order.Product.ID)})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get device: %s", err))
 		device = macbaremetal.Device{ID: order.Product.ID}
@@ -186,7 +184,7 @@ func (m macBareMetalDeviceResource) Read(ctx context.Context, request resource.R
 		return
 	}
 
-	device, err := m.deviceService.Get(ctx, int(state.ID.ValueInt64()))
+	device, err := m.client.MacBareMetal.Device.Get(ctx, macbaremetal.DeviceGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("device %d", state.ID.ValueInt64()))
@@ -217,13 +215,14 @@ func (m macBareMetalDeviceResource) Update(ctx context.Context, request resource
 		return
 	}
 
-	update := macbaremetal.DeviceUpdate{
-		Name: config.Name.ValueString(),
+	update := macbaremetal.DeviceUpdateReq{
+		ID:   uint(state.ID.ValueInt64()),
+		Name: nonZero(config.Name.ValueString()),
 	}
 
 	var device macbaremetal.Device
 	err := retry(ctx, "update device", func() (err error) {
-		device, err = m.deviceService.Update(ctx, int(state.ID.ValueInt64()), update)
+		device, err = m.client.MacBareMetal.Device.Update(ctx, update)
 		return err
 	})
 	if err != nil {
@@ -246,11 +245,11 @@ func (m macBareMetalDeviceResource) Delete(ctx context.Context, request resource
 		return
 	}
 
-	deviceID := int(state.ID.ValueInt64())
+	deviceID := uint(state.ID.ValueInt64())
 
 	// a delete only ends the device's commitment, the device itself stays until
 	// the period expires. the api's answer is final: nothing to retry or wait for
-	err := m.deviceService.Delete(ctx, deviceID)
+	err := m.client.MacBareMetal.Device.Delete(ctx, macbaremetal.DeviceDeleteReq{ID: deviceID})
 	if err != nil && !isNotFound(err) {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete device: %s", err))
 		return

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/core"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -170,11 +170,11 @@ func (c *macBareMetalSecurityGroupRuleDataSource) Configure(ctx context.Context,
 		return
 	}
 
-	c.securityGroupService = macbaremetal.NewSecurityGroupService(client)
+	c.client = client
 }
 
 type macBareMetalSecurityGroupRuleDataSource struct {
-	securityGroupService macbaremetal.SecurityGroupService
+	client flowClient
 }
 
 func (c macBareMetalSecurityGroupRuleDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
@@ -188,7 +188,10 @@ func (c macBareMetalSecurityGroupRuleDataSource) Read(ctx context.Context, reque
 	securityGroupID := int(config.SecurityGroupID.ValueInt64())
 	ruleID := int(config.ID.ValueInt64())
 
-	list, err := c.securityGroupService.Rules(securityGroupID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := c.client.MacBareMetal.SecurityGroupRule.List(ctx, macbaremetal.SecurityGroupRuleListReq{
+		SecurityGroupID: uint(securityGroupID),
+		Cursor:          core.CursorAll,
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security group rules: %s", err))
 		return

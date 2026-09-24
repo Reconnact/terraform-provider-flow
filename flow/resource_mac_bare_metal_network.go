@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient/macbaremetal"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -144,11 +144,11 @@ func (r *macBareMetalNetworkResource) Configure(ctx context.Context, request res
 		return
 	}
 
-	r.networkService = macbaremetal.NewNetworkService(client)
+	r.client = client
 }
 
 type macBareMetalNetworkResource struct {
-	networkService macbaremetal.NetworkService
+	client flowClient
 }
 
 func (r macBareMetalNetworkResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
@@ -159,14 +159,14 @@ func (r macBareMetalNetworkResource) Create(ctx context.Context, request resourc
 		return
 	}
 
-	create := macbaremetal.NetworkCreate{
+	create := macbaremetal.NetworkCreateReq{
 		Name:       config.Name.ValueString(),
 		LocationID: int(config.LocationID.ValueInt64()),
 	}
 
 	var network macbaremetal.Network
 	err := retryCreate(ctx, "create network", func() (err error) {
-		network, err = r.networkService.Create(ctx, create)
+		network, err = r.client.MacBareMetal.Network.Create(ctx, create)
 		return err
 	})
 	if err != nil {
@@ -175,8 +175,9 @@ func (r macBareMetalNetworkResource) Create(ctx context.Context, request resourc
 	}
 
 	if len(config.DomainNameServers) != 0 || !config.DomainName.IsNull() {
-		update := macbaremetal.NetworkUpdate{
-			DomainName:        config.DomainName.ValueString(),
+		update := macbaremetal.NetworkUpdateReq{
+			ID:                uint(network.ID),
+			DomainName:        nonZero(config.DomainName.ValueString()),
 			DomainNameServers: nil,
 		}
 
@@ -184,7 +185,7 @@ func (r macBareMetalNetworkResource) Create(ctx context.Context, request resourc
 			update.DomainNameServers = append(update.DomainNameServers, domainNameServer.ValueString())
 		}
 
-		updated, err := retryUpdate(ctx, network.ID, update, r.networkService)
+		updated, err := retryUpdate(ctx, update, r.client.MacBareMetal.Network)
 		if err != nil {
 			response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update network: %s", err))
 		} else {
@@ -207,7 +208,7 @@ func (r macBareMetalNetworkResource) Read(ctx context.Context, request resource.
 		return
 	}
 
-	network, err := r.networkService.Get(ctx, int(state.ID.ValueInt64()))
+	network, err := r.client.MacBareMetal.Network.Get(ctx, macbaremetal.NetworkGetReq{ID: uint(state.ID.ValueInt64())})
 	if err != nil {
 		if isNotFound(err) {
 			removeGone(ctx, response, fmt.Sprintf("network %d", state.ID.ValueInt64()))
@@ -238,9 +239,10 @@ func (r macBareMetalNetworkResource) Update(ctx context.Context, request resourc
 		return
 	}
 
-	update := macbaremetal.NetworkUpdate{
-		Name:       config.Name.ValueString(),
-		DomainName: config.DomainName.ValueString(),
+	update := macbaremetal.NetworkUpdateReq{
+		ID:         uint(state.ID.ValueInt64()),
+		Name:       nonZero(config.Name.ValueString()),
+		DomainName: nonZero(config.DomainName.ValueString()),
 	}
 
 	if len(config.DomainNameServers) != 0 {
@@ -250,7 +252,7 @@ func (r macBareMetalNetworkResource) Update(ctx context.Context, request resourc
 		}
 	}
 
-	network, err := retryUpdate(ctx, int(state.ID.ValueInt64()), update, r.networkService)
+	network, err := retryUpdate(ctx, update, r.client.MacBareMetal.Network)
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update network: %s", err))
 		return
@@ -271,7 +273,7 @@ func (r macBareMetalNetworkResource) Delete(ctx context.Context, request resourc
 	}
 
 	err := retryDelete(ctx, "delete network", func() error {
-		return r.networkService.Delete(ctx, int(state.ID.ValueInt64()))
+		return r.client.MacBareMetal.Network.Delete(ctx, macbaremetal.NetworkDeleteReq{ID: uint(state.ID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete network: %s", err))
@@ -279,9 +281,9 @@ func (r macBareMetalNetworkResource) Delete(ctx context.Context, request resourc
 	}
 }
 
-func retryUpdate(ctx context.Context, id int, update macbaremetal.NetworkUpdate, service macbaremetal.NetworkService) (network macbaremetal.Network, err error) {
+func retryUpdate(ctx context.Context, update macbaremetal.NetworkUpdateReq, service *macbaremetal.NetworkService) (network macbaremetal.Network, err error) {
 	err = retry(ctx, "update network", func() (err error) {
-		network, err = service.Update(ctx, id, update)
+		network, err = service.Update(ctx, update)
 		return err
 	})
 	return network, err
