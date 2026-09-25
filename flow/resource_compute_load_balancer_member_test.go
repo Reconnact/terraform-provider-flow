@@ -29,6 +29,8 @@ func TestAccComputeLoadBalancerMember_Basic(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateIdFunc: testAccCompositeImportID("flow_compute_load_balancer_member.foobar", "load_balancer_id", "pool_id", "id"),
+				// the health check moves status on its own, nothing listens on the member's port
+				ImportStateVerifyIgnore: []string{"status"},
 			},
 		},
 	})
