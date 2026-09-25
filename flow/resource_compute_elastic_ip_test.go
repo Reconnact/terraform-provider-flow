@@ -3,11 +3,11 @@ package flow
 import (
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccComputeElasticIP_Basic(t *testing.T) {
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -17,6 +17,11 @@ func TestAccComputeElasticIP_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("flow_compute_elastic_ip.foobar", "public_ip"),
 					resource.TestCheckResourceAttr("flow_compute_elastic_ip.foobar", "location_id", "1"),
 				),
+			},
+			{
+				ResourceName:      "flow_compute_elastic_ip.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

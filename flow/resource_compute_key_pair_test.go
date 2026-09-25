@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccComputeKeyPair_Basic(t *testing.T) {
@@ -15,7 +15,7 @@ func TestAccComputeKeyPair_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -26,6 +26,13 @@ func TestAccComputeKeyPair_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_key_pair.foobar", "name", keyPairName),
 					resource.TestCheckResourceAttr("flow_compute_key_pair.foobar", "public_key", public),
 				),
+			},
+			{
+				ResourceName:      "flow_compute_key_pair.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// the api returns the fingerprint only, not the key
+				ImportStateVerifyIgnore: []string{"public_key"},
 			},
 		},
 	})

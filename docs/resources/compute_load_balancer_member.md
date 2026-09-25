@@ -3,12 +3,12 @@
 page_title: "flow_compute_load_balancer_member Resource - terraform-provider-flow"
 subcategory: ""
 description: |-
-  
+  Import: terraform import flow_compute_load_balancer_member.<name> <load_balancer_id>:<pool_id>:<id>
 ---
 
 # flow_compute_load_balancer_member (Resource)
 
-
+Import: `terraform import flow_compute_load_balancer_member.<name> <load_balancer_id>:<pool_id>:<id>`
 
 
 
@@ -23,6 +23,19 @@ description: |-
 - `pool_id` (Number) unique identifier of the load balancer pool
 - `port` (Number) port of the load balancer member
 
+### Optional
+
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+
 ### Read-Only
 
 - `id` (Number) unique identifier of the load balancer member
+- `status` (String) current status of the load balancer member, as a stable key (`active`, `disabled`, `working`, `degraded`, `error`)
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) bounds the whole create; unset, the load balancer is given 10m to become mutable again; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
+- `delete` (String) bounds the whole delete; unset, the load balancer is given 10m to become mutable again; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"

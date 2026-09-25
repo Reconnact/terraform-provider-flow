@@ -17,13 +17,26 @@ description: |-
 
 ### Required
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `location_id` (Number) unique identifier of the location
 - `name` (String) name of the device
 - `network_id` (Number) unique identifier of the network
-- `password` (String, Sensitive) password of the device
+- `password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) password of the device; editing it produces no plan, rotate with `terraform apply -replace=`
 - `product_id` (Number) unique identifier of the product
+
+### Optional
+
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
 - `id` (Number) unique identifier of the device
 - `network_interface_id` (Number) unique identifier of the network interface
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) bounds the whole create; unset, the order wait is bounded at 10m; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"

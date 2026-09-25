@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccComputeRouter_Basic(t *testing.T) {
 	routerName := acctest.RandomWithPrefix("test-router")
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -33,6 +34,40 @@ func TestAccComputeRouter_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_router.foobar_private", "public", "false"),
 					resource.TestCheckNoResourceAttr("flow_compute_router.foobar_private", "public_ip"),
 				),
+			},
+		},
+	})
+}
+
+func TestAccComputeRouter_PublicOff(t *testing.T) {
+	routerName := acctest.RandomWithPrefix("test-router")
+
+	testAccSequential(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(testAccComputeRouterConfigBasic, "foobar", routerName, true),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("flow_compute_router.foobar", "public", "true"),
+					resource.TestCheckResourceAttrSet("flow_compute_router.foobar", "public_ip"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(testAccComputeRouterConfigBasic, "foobar", routerName, false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("flow_compute_router.foobar", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("flow_compute_router.foobar", "public", "false"),
+					resource.TestCheckNoResourceAttr("flow_compute_router.foobar", "public_ip"),
+				),
+			},
+			{
+				ResourceName:      "flow_compute_router.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

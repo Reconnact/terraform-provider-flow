@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccComputeSnapshot_Basic(t *testing.T) {
-	t.Skip("skipping test due to race condition during deletion in api")
 
 	volumeName := acctest.RandomWithPrefix("test-volume")
 	volumeSize := acctest.RandIntRange(1, 20)
 	snapshotName := acctest.RandomWithPrefix("test-snapshot")
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -27,6 +27,22 @@ func TestAccComputeSnapshot_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("flow_compute_snapshot.foobar", "volume_id"),
 					resource.TestCheckResourceAttrSet("flow_compute_snapshot.foobar", "created_at"),
 				),
+			},
+			{
+				Config: fmt.Sprintf(testAccComputeSnapshotConfigBasic, volumeName, volumeSize, snapshotName+"-renamed"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("flow_compute_snapshot.foobar", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("flow_compute_snapshot.foobar", "name", snapshotName+"-renamed"),
+				),
+			},
+			{
+				ResourceName:      "flow_compute_snapshot.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

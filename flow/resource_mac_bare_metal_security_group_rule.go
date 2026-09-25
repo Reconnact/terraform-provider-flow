@@ -4,19 +4,24 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flowswiss/goclient"
-	"github.com/flowswiss/goclient/macbaremetal"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/flowswiss/goclient/v2/core"
+	"github.com/flowswiss/goclient/v2/macbaremetal"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/flowswiss/terraform-provider-flow/validators"
 )
 
 var (
-	_ tfsdk.ResourceType                 = (*macBareMetalSecurityGroupRuleResourceType)(nil)
-	_ tfsdk.Resource                     = (*macBareMetalSecurityGroupRuleResource)(nil)
-	_ tfsdk.ResourceWithConfigValidators = (*macBareMetalSecurityGroupRuleResource)(nil)
+	_ resource.Resource                     = (*macBareMetalSecurityGroupRuleResource)(nil)
+	_ resource.ResourceWithConfigure        = (*macBareMetalSecurityGroupRuleResource)(nil)
+	_ resource.ResourceWithConfigValidators = (*macBareMetalSecurityGroupRuleResource)(nil)
+	_ resource.ResourceWithImportState      = (*macBareMetalSecurityGroupRuleResource)(nil)
 )
 
 var macBareMetalProtocolNumberToName = map[int]string{
@@ -39,19 +44,22 @@ type macBareMetalSecurityGroupRuleResourceProtocol struct {
 }
 
 func (r *macBareMetalSecurityGroupRuleResourceProtocol) FromNumber(number int) {
-	r.Number = types.Int64{Value: int64(number)}
+	r.Number = types.Int64Value(int64(number))
 
-	name, found := macBareMetalProtocolNumberToName[number]
-	r.Name = types.String{Value: name, Null: !found}
+	if name, found := macBareMetalProtocolNumberToName[number]; found {
+		r.Name = types.StringValue(name)
+	} else {
+		r.Name = types.StringNull()
+	}
 }
 
 func (r macBareMetalSecurityGroupRuleResourceProtocol) ToNumber() int {
-	if !r.Number.Null {
-		return int(r.Number.Value)
+	if !r.Number.IsNull() {
+		return int(r.Number.ValueInt64())
 	}
 
-	if !r.Name.Null {
-		return macBareMetalProtocolNamesToNumber[r.Name.Value]
+	if !r.Name.IsNull() {
+		return macBareMetalProtocolNamesToNumber[r.Name.ValueString()]
 	}
 
 	return 0
@@ -81,141 +89,138 @@ type macBareMetalSecurityGroupRuleResourceData struct {
 }
 
 func (r *macBareMetalSecurityGroupRuleResourceData) FromEntity(securityGroupID int, rule macbaremetal.SecurityGroupRule) {
-	r.ID = types.Int64{Value: int64(rule.ID)}
-	r.SecurityGroupID = types.Int64{Value: int64(securityGroupID)}
+	r.ID = types.Int64Value(int64(rule.ID))
+	r.SecurityGroupID = types.Int64Value(int64(securityGroupID))
 
-	r.Direction = types.String{Value: rule.Direction}
+	r.Direction = types.StringValue(rule.Direction)
 	r.Protocol = &macBareMetalSecurityGroupRuleResourceProtocol{}
 	r.Protocol.FromNumber(rule.Protocol)
 
+	r.PortRange = nil
 	if rule.Protocol == macbaremetal.ProtocolTCP || rule.Protocol == macbaremetal.ProtocolUDP {
 		r.PortRange = &macBareMetalSecurityGroupRuleResourcePortRange{
-			From: types.Int64{Value: int64(rule.FromPort)},
-			To:   types.Int64{Value: int64(rule.ToPort)},
+			From: types.Int64Value(int64(rule.FromPort)),
+			To:   types.Int64Value(int64(rule.ToPort)),
 		}
 	}
 
+	r.ICMP = nil
 	if rule.Protocol == macbaremetal.ProtocolICMP {
 		r.ICMP = &macBareMetalSecurityGroupRuleResourceICMP{
-			Type: types.Int64{Value: int64(rule.ICMPType)},
-			Code: types.Int64{Value: int64(rule.ICMPCode)},
+			Type: types.Int64Value(int64(rule.ICMPType)),
+			Code: types.Int64Value(int64(rule.ICMPCode)),
 		}
 	}
 
 	if rule.IPRange == "" {
-		r.IPRange = types.String{Null: true}
+		r.IPRange = types.StringNull()
 	} else {
-		r.IPRange = types.String{Value: rule.IPRange}
+		r.IPRange = types.StringValue(rule.IPRange)
 	}
 }
 
-type macBareMetalSecurityGroupRuleResourceType struct{}
-
-func (r macBareMetalSecurityGroupRuleResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.Int64Type,
+func (r macBareMetalSecurityGroupRuleResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		MarkdownDescription: "Import: `terraform import flow_mac_bare_metal_security_group_rule.<name> <security_group_id>:<id>`",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the security group rule",
 				Computed:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
-			"security_group_id": {
-				Type:                types.Int64Type,
+			"security_group_id": schema.Int64Attribute{
 				MarkdownDescription: "unique identifier of the security group",
 				Required:            true,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(),
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
 				},
 			},
-			"direction": {
-				Type:                types.StringType,
+			"direction": schema.StringAttribute{
 				MarkdownDescription: "direction of the security group rule (ingress or egress)",
 				Required:            true,
 			},
-			"protocol": {
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"number": {
-						Type:                types.Int64Type,
+			"protocol": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"number": schema.Int64Attribute{
 						MarkdownDescription: "iana protocol number of the security group rule",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{
-							tfsdk.UseStateForUnknown(),
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
 						},
 					},
-					"name": {
-						Type:                types.StringType,
+					"name": schema.StringAttribute{
 						MarkdownDescription: "protocol name of the security group rule",
 						Optional:            true,
 						Computed:            true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{
-							tfsdk.UseStateForUnknown(),
+						PlanModifiers: []planmodifier.String{
+							stringplanmodifier.UseStateForUnknown(),
 						},
 					},
-				}),
+				},
 				MarkdownDescription: "protocol of the security group rule",
 				Required:            true,
 			},
-			"port_range": {
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"from": {
-						Type:                types.Int64Type,
+			"port_range": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"from": schema.Int64Attribute{
 						MarkdownDescription: "starting port of the security group rule",
 						Required:            true,
 					},
-					"to": {
-						Type:                types.Int64Type,
+					"to": schema.Int64Attribute{
 						MarkdownDescription: "ending port of the security group rule",
 						Required:            true,
 					},
-				}),
+				},
 				MarkdownDescription: "port range filter of the security group rule",
 				Optional:            true,
 			},
-			"icmp": {
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"type": {
-						Type:                types.Int64Type,
+			"icmp": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"type": schema.Int64Attribute{
 						MarkdownDescription: "type of the ICMP message",
 						Required:            true,
 					},
-					"code": {
-						Type:                types.Int64Type,
+					"code": schema.Int64Attribute{
 						MarkdownDescription: "code of the ICMP message",
 						Required:            true,
 					},
-				}),
+				},
 				MarkdownDescription: "ICMP message filter of the security group rule",
 				Optional:            true,
 			},
-			"ip_range": {
-				Type:                types.StringType,
+			"ip_range": schema.StringAttribute{
 				MarkdownDescription: "ip range of the security group rule",
 				Optional:            true,
 			},
 		},
-	}, nil
+	}
 }
 
-func (r macBareMetalSecurityGroupRuleResourceType) NewResource(ctx context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	prov, diagnostics := convertToLocalProviderType(p)
-	if diagnostics.HasError() {
-		return nil, diagnostics
+func newMacBareMetalSecurityGroupRuleResource() resource.Resource {
+	return &macBareMetalSecurityGroupRuleResource{}
+}
+
+func (r *macBareMetalSecurityGroupRuleResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
+	response.TypeName = request.ProviderTypeName + "_mac_bare_metal_security_group_rule"
+}
+
+func (r *macBareMetalSecurityGroupRuleResource) Configure(ctx context.Context, request resource.ConfigureRequest, response *resource.ConfigureResponse) {
+	client, ok := clientFromProviderData(request.ProviderData, &response.Diagnostics)
+	if !ok {
+		return
 	}
 
-	return macBareMetalSecurityGroupRuleResource{
-		securityGroupService: macbaremetal.NewSecurityGroupService(prov.client),
-	}, diagnostics
+	r.client = client
 }
 
 type macBareMetalSecurityGroupRuleResource struct {
-	securityGroupService macbaremetal.SecurityGroupService
+	client flowClient
 }
 
-func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, request tfsdk.CreateResourceRequest, response *tfsdk.CreateResourceResponse) {
+func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var config macBareMetalSecurityGroupRuleResourceData
 	diagnostics := request.Config.Get(ctx, &config)
 	response.Diagnostics.Append(diagnostics...)
@@ -223,24 +228,29 @@ func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, reque
 		return
 	}
 
-	securityGroupID := int(config.SecurityGroupID.Value)
-	create := macbaremetal.SecurityGroupRuleOptions{
-		Direction: config.Direction.Value,
-		Protocol:  config.Protocol.ToNumber(),
-		IPRange:   config.IPRange.Value,
+	securityGroupID := int(config.SecurityGroupID.ValueInt64())
+	create := macbaremetal.SecurityGroupRuleCreateReq{
+		SecurityGroupID: uint(securityGroupID),
+		Direction:       config.Direction.ValueString(),
+		Protocol:        config.Protocol.ToNumber(),
+		IPRange:         nonZero(config.IPRange.ValueString()),
 	}
 
 	if config.PortRange != nil {
-		create.FromPort = int(config.PortRange.From.Value)
-		create.ToPort = int(config.PortRange.To.Value)
+		create.FromPort = nonZero(int(config.PortRange.From.ValueInt64()))
+		create.ToPort = nonZero(int(config.PortRange.To.ValueInt64()))
 	}
 
 	if config.ICMP != nil {
-		create.ICMPType = int(config.ICMP.Type.Value)
-		create.ICMPCode = int(config.ICMP.Code.Value)
+		create.ICMPType = intPointer(config.ICMP.Type)
+		create.ICMPCode = intPointer(config.ICMP.Code)
 	}
 
-	rule, err := r.securityGroupService.Rules(securityGroupID).Create(ctx, create)
+	var rule macbaremetal.SecurityGroupRule
+	err := retryCreate(ctx, "create security group rule", func() (err error) {
+		rule, err = r.client.MacBareMetal.SecurityGroupRule.Create(ctx, create)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to create security group rule: %s", err))
 		return
@@ -253,7 +263,7 @@ func (r macBareMetalSecurityGroupRuleResource) Create(ctx context.Context, reque
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r macBareMetalSecurityGroupRuleResource) Read(ctx context.Context, request tfsdk.ReadResourceRequest, response *tfsdk.ReadResourceResponse) {
+func (r macBareMetalSecurityGroupRuleResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state macBareMetalSecurityGroupRuleResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -261,11 +271,18 @@ func (r macBareMetalSecurityGroupRuleResource) Read(ctx context.Context, request
 		return
 	}
 
-	securityGroupID := int(state.SecurityGroupID.Value)
-	ruleID := int(state.ID.Value)
+	securityGroupID := int(state.SecurityGroupID.ValueInt64())
+	ruleID := int(state.ID.ValueInt64())
 
-	list, err := r.securityGroupService.Rules(securityGroupID).List(ctx, goclient.Cursor{NoFilter: 1})
+	list, err := r.client.MacBareMetal.SecurityGroupRule.List(ctx, macbaremetal.SecurityGroupRuleListReq{
+		SecurityGroupID: uint(securityGroupID),
+		Cursor:          core.CursorAll,
+	})
 	if err != nil {
+		if isNotFound(err) {
+			removeGone(ctx, response, fmt.Sprintf("security group %d", securityGroupID))
+			return
+		}
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to list security group rules: %s", err))
 		return
 	}
@@ -280,10 +297,10 @@ func (r macBareMetalSecurityGroupRuleResource) Read(ctx context.Context, request
 		}
 	}
 
-	response.Diagnostics.AddError("Not Found", fmt.Sprintf("security group rule %d could not be found", ruleID))
+	removeGone(ctx, response, fmt.Sprintf("security group rule %d", ruleID))
 }
 
-func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, request tfsdk.UpdateResourceRequest, response *tfsdk.UpdateResourceResponse) {
+func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var state macBareMetalSecurityGroupRuleResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -298,26 +315,31 @@ func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, reque
 		return
 	}
 
-	securityGroupID := int(config.SecurityGroupID.Value)
-	ruleID := int(state.ID.Value)
+	securityGroupID := int(config.SecurityGroupID.ValueInt64())
 
-	update := macbaremetal.SecurityGroupRuleOptions{
-		Direction: config.Direction.Value,
-		Protocol:  config.Protocol.ToNumber(),
-		IPRange:   config.IPRange.Value,
+	update := macbaremetal.SecurityGroupRuleUpdateReq{
+		SecurityGroupID:     uint(securityGroupID),
+		SecurityGroupRuleID: uint(state.ID.ValueInt64()),
+		Direction:           new(config.Direction.ValueString()),
+		Protocol:            new(config.Protocol.ToNumber()),
+		IPRange:             nonZero(config.IPRange.ValueString()),
 	}
 
 	if config.PortRange != nil {
-		update.FromPort = int(config.PortRange.From.Value)
-		update.ToPort = int(config.PortRange.To.Value)
+		update.FromPort = nonZero(int(config.PortRange.From.ValueInt64()))
+		update.ToPort = nonZero(int(config.PortRange.To.ValueInt64()))
 	}
 
 	if config.ICMP != nil {
-		update.ICMPType = int(config.ICMP.Type.Value)
-		update.ICMPCode = int(config.ICMP.Code.Value)
+		update.ICMPType = intPointer(config.ICMP.Type)
+		update.ICMPCode = intPointer(config.ICMP.Code)
 	}
 
-	rule, err := r.securityGroupService.Rules(securityGroupID).Update(ctx, ruleID, update)
+	var rule macbaremetal.SecurityGroupRule
+	err := retry(ctx, "update security group rule", func() (err error) {
+		rule, err = r.client.MacBareMetal.SecurityGroupRule.Update(ctx, update)
+		return err
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to update security group rule: %s", err))
 		return
@@ -329,7 +351,7 @@ func (r macBareMetalSecurityGroupRuleResource) Update(ctx context.Context, reque
 	response.Diagnostics.Append(diagnostics...)
 }
 
-func (r macBareMetalSecurityGroupRuleResource) Delete(ctx context.Context, request tfsdk.DeleteResourceRequest, response *tfsdk.DeleteResourceResponse) {
+func (r macBareMetalSecurityGroupRuleResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state macBareMetalSecurityGroupRuleResourceData
 	diagnostics := request.State.Get(ctx, &state)
 	response.Diagnostics.Append(diagnostics...)
@@ -337,18 +359,24 @@ func (r macBareMetalSecurityGroupRuleResource) Delete(ctx context.Context, reque
 		return
 	}
 
-	securityGroupID := int(state.SecurityGroupID.Value)
-	ruleID := int(state.ID.Value)
-
-	err := r.securityGroupService.Rules(securityGroupID).Delete(ctx, ruleID)
+	err := retryDelete(ctx, "delete security group rule", func() error {
+		return r.client.MacBareMetal.SecurityGroupRule.Delete(ctx, macbaremetal.SecurityGroupRuleDeleteReq{
+			SecurityGroupID:     uint(state.SecurityGroupID.ValueInt64()),
+			SecurityGroupRuleID: uint(state.ID.ValueInt64()),
+		})
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to delete security group rule: %s", err))
 		return
 	}
 }
 
-func (r macBareMetalSecurityGroupRuleResource) ConfigValidators(ctx context.Context) []tfsdk.ResourceConfigValidator {
-	return []tfsdk.ResourceConfigValidator{
+func (r macBareMetalSecurityGroupRuleResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
+	importStateCompositeInt64IDs(ctx, request, response, path.Root("security_group_id"), path.Root("id"))
+}
+
+func (r macBareMetalSecurityGroupRuleResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
 		validators.MutuallyExclusive("port_range", "icmp"),
 	}
 }

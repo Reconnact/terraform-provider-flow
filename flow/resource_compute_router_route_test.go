@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccComputeRouterRoute_Basic(t *testing.T) {
@@ -19,7 +19,7 @@ func TestAccComputeRouterRoute_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resource.ParallelTest(t, resource.TestCase{
+	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
@@ -30,6 +30,12 @@ func TestAccComputeRouterRoute_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_router_route.foobar", "destination", destination),
 					resource.TestCheckResourceAttr("flow_compute_router_route.foobar", "next_hop", nextHop),
 				),
+			},
+			{
+				ResourceName:      "flow_compute_router_route.foobar",
+				ImportState:       true,
+				ImportStateIdFunc: testAccCompositeImportID("flow_compute_router_route.foobar", "router_id", "id"),
+				ImportStateVerify: true,
 			},
 		},
 	})

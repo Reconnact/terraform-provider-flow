@@ -18,14 +18,24 @@ description: |-
 ### Required
 
 - `location_id` (Number) identifier of the location of the volume
+- `name` (String) name of the volume
 - `size` (Number) size in GiB of the volume
 
 ### Optional
 
-- `name` (String) name of the volume
 - `restore_from_snapshot_id` (Number) restore the volume from the snapshot
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
 - `id` (Number) unique identifier of the volume
 - `serial_number` (String) unique serial number of the volume
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) bounds the whole create; unset, the volume is given 30m to settle, which a restore from a snapshot needs; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
+- `delete` (String) bounds the whole delete; unset, the volume is given 10m to disappear; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
+- `update` (String) bounds the whole update; unset, an expand gives the volume 5m to settle; a string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration), such as "30s" or "2h45m"
