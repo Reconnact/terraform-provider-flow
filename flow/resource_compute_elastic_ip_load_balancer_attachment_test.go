@@ -27,6 +27,13 @@ func TestAccComputeElasticIPLoadBalancerAttachment_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrPair("flow_compute_load_balancer.foobar", "public_ip", "flow_compute_elastic_ip.foobar", "public_ip"),
 				),
 			},
+			{
+				ResourceName:                         "flow_compute_elastic_ip_load_balancer_attachment.foobar",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "load_balancer_id",
+				ImportStateIdFunc:                    testAccCompositeImportID("flow_compute_elastic_ip_load_balancer_attachment.foobar", "load_balancer_id", "elastic_ip_id"),
+			},
 		},
 	})
 }

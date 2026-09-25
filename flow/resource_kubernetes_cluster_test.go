@@ -75,6 +75,11 @@ func TestAccKubernetesCluster_Lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttrPair("flow_kubernetes_cluster.foobar", "node_product_id", "data.flow_product.node", "id"),
 				),
 			},
+			{
+				ResourceName:      "flow_kubernetes_cluster.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

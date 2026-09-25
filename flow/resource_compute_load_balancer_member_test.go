@@ -24,6 +24,12 @@ func TestAccComputeLoadBalancerMember_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_load_balancer_member.foobar", "port", "8080"),
 				),
 			},
+			{
+				ResourceName:      "flow_compute_load_balancer_member.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateIdFunc: testAccCompositeImportID("flow_compute_load_balancer_member.foobar", "load_balancer_id", "pool_id", "id"),
+			},
 		},
 	})
 }

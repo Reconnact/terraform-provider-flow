@@ -25,9 +25,18 @@ func TestAccComputeRouterInterface_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("flow_compute_router_interface.foobar", "private_ip"),
 				),
 			},
+			{
+				ResourceName:      "flow_compute_router_interface.foobar",
+				ImportState:       true,
+				ImportStateIdFunc: testAccCompositeImportID("flow_compute_router_interface.foobar", "router_id", "id"),
+				ImportStateVerify: true,
+			},
 		},
 	})
 }
+
+// testAccCompositeImportID builds the colon separated import id of a resource
+// that is only addressable through its parent, e.g. `router_id:id`
 
 const testAccComputeRouterInterfaceConfigBasic = `
 locals {

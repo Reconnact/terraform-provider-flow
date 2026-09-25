@@ -31,6 +31,12 @@ func TestAccComputeRouterRoute_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_router_route.foobar", "next_hop", nextHop),
 				),
 			},
+			{
+				ResourceName:      "flow_compute_router_route.foobar",
+				ImportState:       true,
+				ImportStateIdFunc: testAccCompositeImportID("flow_compute_router_route.foobar", "router_id", "id"),
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

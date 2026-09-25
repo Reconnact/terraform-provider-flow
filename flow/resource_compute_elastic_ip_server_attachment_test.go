@@ -10,17 +10,25 @@ import (
 
 func TestAccComputeElasticIPServerAttachment_Basic(t *testing.T) {
 	name := acctest.RandomWithPrefix("test-elastic-ip-attachment")
+	server := testAccServerConfig(t, name, "10.104.0.0/24")
 
 	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccServerConfig(t, name, "10.104.0.0/24") + fmt.Sprintf(testAccComputeElasticIPServerAttachmentConfigBasic, name),
+				Config: server + fmt.Sprintf(testAccComputeElasticIPServerAttachmentConfigBasic, name),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrPair("flow_compute_elastic_ip_server_attachment.foobar", "server_id", "flow_compute_server.foobar", "id"),
 					resource.TestCheckResourceAttrPair("flow_compute_elastic_ip_server_attachment.foobar", "network_interface_id", "flow_compute_server.foobar", "network_interface_id"),
 					resource.TestCheckResourceAttrPair("flow_compute_elastic_ip_server_attachment.foobar", "elastic_ip_id", "flow_compute_elastic_ip.foobar", "id"),
 				),
+			},
+			{
+				ResourceName:                         "flow_compute_elastic_ip_server_attachment.foobar",
+				ImportState:                          true,
+				ImportStateIdFunc:                    testAccCompositeImportID("flow_compute_elastic_ip_server_attachment.foobar", "server_id", "elastic_ip_id"),
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "server_id",
 			},
 		},
 	})

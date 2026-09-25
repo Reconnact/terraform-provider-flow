@@ -18,6 +18,11 @@ func TestAccComputeElasticIP_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_elastic_ip.foobar", "location_id", "1"),
 				),
 			},
+			{
+				ResourceName:      "flow_compute_elastic_ip.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

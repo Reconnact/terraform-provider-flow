@@ -10,16 +10,24 @@ import (
 
 func TestAccComputeVolumeAttachment_Basic(t *testing.T) {
 	name := acctest.RandomWithPrefix("test-volume-attachment")
+	server := testAccServerConfig(t, name, "10.103.0.0/24")
 
 	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccServerConfig(t, name, "10.103.0.0/24") + fmt.Sprintf(testAccComputeVolumeAttachmentConfigBasic, name),
+				Config: server + fmt.Sprintf(testAccComputeVolumeAttachmentConfigBasic, name),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrPair("flow_compute_volume_attachment.foobar", "volume_id", "flow_compute_volume.foobar", "id"),
 					resource.TestCheckResourceAttrPair("flow_compute_volume_attachment.foobar", "server_id", "flow_compute_server.foobar", "id"),
 				),
+			},
+			{
+				ResourceName:                         "flow_compute_volume_attachment.foobar",
+				ImportState:                          true,
+				ImportStateIdFunc:                    testAccCompositeImportID("flow_compute_volume_attachment.foobar", "volume_id"),
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "volume_id",
 			},
 		},
 	})

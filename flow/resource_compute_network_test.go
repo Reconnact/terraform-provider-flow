@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccComputeNetwork_Basic(t *testing.T) {
@@ -28,6 +29,23 @@ func TestAccComputeNetwork_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("flow_compute_network.foobar", "allocation_pool.end"),
 					resource.TestCheckResourceAttrSet("flow_compute_network.foobar", "gateway_ip"),
 				),
+			},
+			{
+				Config: fmt.Sprintf(testAccComputeNetworkConfigBasic, networkName+"-renamed", networkCIDR),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("flow_compute_network.foobar", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("flow_compute_network.foobar", "name", networkName+"-renamed"),
+					resource.TestCheckResourceAttr("flow_compute_network.foobar", "cidr", networkCIDR),
+				),
+			},
+			{
+				ResourceName:      "flow_compute_network.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

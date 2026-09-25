@@ -49,6 +49,12 @@ func TestAccComputeSecurityGroupRule_Basic(t *testing.T) {
 					resource.TestCheckNoResourceAttr("flow_compute_security_group_rule.foobar_egress", "remote_security_group_id"),
 				),
 			},
+			{
+				ResourceName:      "flow_compute_security_group_rule.foobar_egress",
+				ImportState:       true,
+				ImportStateIdFunc: testAccCompositeImportID("flow_compute_security_group_rule.foobar_egress", "security_group_id", "id"),
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

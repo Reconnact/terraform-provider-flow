@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccComputeSnapshot_Basic(t *testing.T) {
@@ -26,6 +27,22 @@ func TestAccComputeSnapshot_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("flow_compute_snapshot.foobar", "volume_id"),
 					resource.TestCheckResourceAttrSet("flow_compute_snapshot.foobar", "created_at"),
 				),
+			},
+			{
+				Config: fmt.Sprintf(testAccComputeSnapshotConfigBasic, volumeName, volumeSize, snapshotName+"-renamed"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("flow_compute_snapshot.foobar", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("flow_compute_snapshot.foobar", "name", snapshotName+"-renamed"),
+				),
+			},
+			{
+				ResourceName:      "flow_compute_snapshot.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

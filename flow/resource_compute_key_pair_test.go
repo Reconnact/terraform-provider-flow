@@ -27,6 +27,13 @@ func TestAccComputeKeyPair_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_key_pair.foobar", "public_key", public),
 				),
 			},
+			{
+				ResourceName:      "flow_compute_key_pair.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+				// the api returns the fingerprint only, not the key
+				ImportStateVerifyIgnore: []string{"public_key"},
+			},
 		},
 	})
 }

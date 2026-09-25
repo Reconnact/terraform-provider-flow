@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccComputeLoadBalancer_Basic(t *testing.T) {
@@ -24,6 +25,22 @@ func TestAccComputeLoadBalancer_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("flow_compute_load_balancer.foobar", "private_ip"),
 					resource.TestCheckNoResourceAttr("flow_compute_load_balancer.foobar", "public_ip"),
 				),
+			},
+			{
+				Config: fmt.Sprintf(testAccComputeLoadBalancerConfigBasic, name+"-renamed", "10.105.0.0/24"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("flow_compute_load_balancer.foobar", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("flow_compute_load_balancer.foobar", "name", name+"-renamed"),
+				),
+			},
+			{
+				ResourceName:      "flow_compute_load_balancer.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

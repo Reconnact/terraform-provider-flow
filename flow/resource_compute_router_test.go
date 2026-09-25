@@ -64,6 +64,11 @@ func TestAccComputeRouter_PublicOff(t *testing.T) {
 					resource.TestCheckNoResourceAttr("flow_compute_router.foobar", "public_ip"),
 				),
 			},
+			{
+				ResourceName:      "flow_compute_router.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

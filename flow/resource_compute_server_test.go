@@ -1,20 +1,32 @@
 package flow
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccComputeServer_Basic(t *testing.T) {
 	serverName := acctest.RandomWithPrefix("test-server")
+	config := testAccServerConfig(t, serverName, "10.101.0.0/24")
+
+	// key pair and network carry the same name and replace on a rename, so only the server's line changes
+	serverLine := `name        = "` + serverName + `"
+	location_id = 1
+	image_id`
+	if strings.Count(config, serverLine) != 1 {
+		t.Fatal("server name line not found in testAccServerConfig")
+	}
+	renamed := strings.Replace(config, serverLine, strings.Replace(serverLine, serverName, serverName+"-renamed", 1), 1)
 
 	testAccSequential(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccServerConfig(t, serverName, "10.101.0.0/24"),
+				Config: config,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("flow_compute_server.foobar", "id"),
 					resource.TestCheckResourceAttr("flow_compute_server.foobar", "name", serverName),
@@ -26,6 +38,22 @@ func TestAccComputeServer_Basic(t *testing.T) {
 					resource.TestCheckResourceAttrSet("flow_compute_server.foobar", "private_ip"),
 					resource.TestCheckResourceAttrSet("flow_compute_server.foobar", "network_interface_id"),
 				),
+			},
+			{
+				Config: renamed,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("flow_compute_server.foobar", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("flow_compute_server.foobar", "name", serverName+"-renamed"),
+				),
+			},
+			{
+				ResourceName:      "flow_compute_server.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})

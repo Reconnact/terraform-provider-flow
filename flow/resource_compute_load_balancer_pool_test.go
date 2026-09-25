@@ -48,6 +48,12 @@ func TestAccComputeLoadBalancerPool_Basic(t *testing.T) {
 					resource.TestCheckResourceAttr("flow_compute_load_balancer_pool.foobar", "health_check.timeout", "5s"),
 				),
 			},
+			{
+				ResourceName:      "flow_compute_load_balancer_pool.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateIdFunc: testAccCompositeImportID("flow_compute_load_balancer_pool.foobar", "load_balancer_id", "id"),
+			},
 		},
 	})
 }
