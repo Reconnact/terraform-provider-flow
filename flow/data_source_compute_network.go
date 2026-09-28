@@ -152,6 +152,13 @@ func (c computeNetworkDataSource) Read(ctx context.Context, request datasource.R
 		return
 	}
 
+	// the list endpoint leaves out the name servers, the allocation pool and the gateway
+	network, err = c.client.Compute.Network.Get(ctx, compute.NetworkGetReq{ID: uint(network.ID)})
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get network: %s", err))
+		return
+	}
+
 	var state computeNetworkDataSourceData
 	state.FromEntity(network)
 

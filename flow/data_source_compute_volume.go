@@ -126,6 +126,13 @@ func (c computeVolumeDataSource) Read(ctx context.Context, request datasource.Re
 		return
 	}
 
+	// the list endpoint leaves out the serial number
+	volume, err = c.client.Compute.Volume.Get(ctx, compute.VolumeGetReq{ID: uint(volume.ID)})
+	if err != nil {
+		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to get volume: %s", err))
+		return
+	}
+
 	var state computeVolumeDataSourceData
 	state.FromEntity(volume)
 
