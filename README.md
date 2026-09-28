@@ -1,6 +1,6 @@
 # Flow Terraform Provider
 
-Terraform provider for the [Flow Swiss](https://flow.swiss/) cloud: compute, kubernetes and mac bare metal.
+Terraform provider for the [Flow Swiss](https://flow.swiss/) cloud: compute and kubernetes.
 
 The docs are on the [Terraform Registry](https://registry.terraform.io/providers/flowswiss/flow/latest/docs).
 Read the two guides first: update or replace, and known limitations.

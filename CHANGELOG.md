@@ -4,8 +4,9 @@
 
 ### Breaking
 - Needs Terraform 1.11 or later.
+- Mac bare metal is gone: `terraform state rm` takes them out of an existing state.
 - These arguments are write-only now: `certificate` and `private_key` on a certificate, `password` and
-  `cloud_init` on a server, `password` on a mac bare metal device. Older Terraform cannot set them.
+  `cloud_init` on a server. Older Terraform cannot set them.
 
 ### New
 - `flow_compute_snapshot` resource.
@@ -13,7 +14,6 @@
 - `status` on `flow_compute_load_balancer_member` and its data source.
 - `public_ip` on `flow_compute_load_balancer`.
 - `flow_compute_elastic_ip_load_balancer_attachment` attaches your own elastic ip to a load balancer.
-- `flow_mac_bare_metal_security_group_rule` can be imported.
 - `flow_kubernetes_node`, `flow_kubernetes_volume` and `flow_kubernetes_load_balancer` data sources introduced
 
 ### Fixes

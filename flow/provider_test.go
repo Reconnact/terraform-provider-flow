@@ -13,7 +13,6 @@ import (
 	"github.com/flowswiss/goclient/v2/compute"
 	"github.com/flowswiss/goclient/v2/core"
 	"github.com/flowswiss/goclient/v2/kubernetes"
-	"github.com/flowswiss/goclient/v2/macbaremetal"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -100,22 +99,6 @@ var testAccExists = map[string]func(ctx context.Context, client flowClient, id i
 	},
 	"flow_kubernetes_cluster": func(ctx context.Context, client flowClient, id int) (bool, error) {
 		_, err := client.Kubernetes.Cluster.Get(ctx, kubernetes.ClusterGetReq{ID: uint(id)})
-		return existsFromGet(err)
-	},
-	"flow_mac_bare_metal_device": func(ctx context.Context, client flowClient, id int) (bool, error) {
-		_, err := client.MacBareMetal.Device.Get(ctx, macbaremetal.DeviceGetReq{ID: uint(id)})
-		return existsFromGet(err)
-	},
-	"flow_mac_bare_metal_elastic_ip": func(ctx context.Context, client flowClient, id int) (bool, error) {
-		_, found, err := findMacBareMetalElasticIP(ctx, client.MacBareMetal.ElasticIP, id)
-		return found, err
-	},
-	"flow_mac_bare_metal_network": func(ctx context.Context, client flowClient, id int) (bool, error) {
-		_, err := client.MacBareMetal.Network.Get(ctx, macbaremetal.NetworkGetReq{ID: uint(id)})
-		return existsFromGet(err)
-	},
-	"flow_mac_bare_metal_security_group": func(ctx context.Context, client flowClient, id int) (bool, error) {
-		_, err := client.MacBareMetal.SecurityGroup.Get(ctx, macbaremetal.SecurityGroupGetReq{ID: uint(id)})
 		return existsFromGet(err)
 	},
 }

@@ -42,17 +42,6 @@ Computed attributes are not listed. They cannot be changed.
 |---|---|---|
 | `flow_kubernetes_cluster` | `name`, `node_count`, `node_product_id`, `version_id` | `location_id`, `network_id`, `public` |
 
-## Mac bare metal
-
-| Resource | Updates in place | Replaces |
-|---|---|---|
-| `flow_mac_bare_metal_device` | `name` | `location_id`, `network_id`, `product_id` |
-| `flow_mac_bare_metal_elastic_ip` | — | `location_id` |
-| `flow_mac_bare_metal_elastic_ip_attachment` | — | `device_id`, `elastic_ip_id`, `network_interface_id` |
-| `flow_mac_bare_metal_network` | `name`, `domain_name`, `domain_name_servers` | `location_id` |
-| `flow_mac_bare_metal_security_group` | `name` | `network_id` |
-| `flow_mac_bare_metal_security_group_rule` | `direction`, `icmp`, `ip_range`, `port_range`, `protocol` | `security_group_id` |
-
 ## Worth knowing
 
 - `product_id` on `flow_compute_server` updates in place. The server is down for about a minute.

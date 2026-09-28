@@ -189,13 +189,6 @@ func (p *flowProvider) Resources(ctx context.Context) []func() resource.Resource
 		newComputeVolumeAttachmentResource,
 
 		newKubernetesClusterResource,
-
-		newMacBareMetalDeviceResource,
-		newMacBareMetalElasticIPResource,
-		newMacBareMetalElasticIPDeviceAttachmentResource,
-		newMacBareMetalNetworkResource,
-		newMacBareMetalSecurityGroupResource,
-		newMacBareMetalSecurityGroupRuleResource,
 	}
 }
 
@@ -230,11 +223,6 @@ func (p *flowProvider) DataSources(ctx context.Context) []func() datasource.Data
 		newKubernetesLoadBalancerDataSource,
 		newKubernetesNodeDataSource,
 		newKubernetesVolumeDataSource,
-
-		newMacBareMetalElasticIPDataSource,
-		newMacBareMetalNetworkDataSource,
-		newMacBareMetalSecurityGroupDataSource,
-		newMacBareMetalSecurityGroupRuleDataSource,
 	}
 }
 

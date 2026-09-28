@@ -1,12 +1,12 @@
 ---
 page_title: "flow Provider"
 description: |-
-  Manages compute, kubernetes and mac bare metal resources on the Flow Swiss cloud.
+  Manages compute and kubernetes resources on the Flow Swiss cloud.
 ---
 
 # flow Provider
 
-Manages compute, kubernetes and mac bare metal resources on the [Flow Swiss](https://flow.swiss/) cloud.
+Manages compute and kubernetes resources on the [Flow Swiss](https://flow.swiss/) cloud.
 
 Needs Terraform 1.11 or later.
 
