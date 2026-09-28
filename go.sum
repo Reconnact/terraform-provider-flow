@@ -52,6 +52,8 @@ github.com/flowswiss/goclient/v2 v2.0.0 h1:3sEUw0NHI2apPKS+BtDa1mNbqcEjWlq1Oyx3Q
 github.com/flowswiss/goclient/v2 v2.0.0/go.mod h1:G1/Zzaj19DS25VgP9FBs36T6GlNdgQMAdbdvU/6bddo=
 github.com/flowswiss/goclient/v2 v2.0.2 h1:AQ1LRp1q7rMNsFMqq6yw+X7NSBsfmsFymfBOlvjUAPk=
 github.com/flowswiss/goclient/v2 v2.0.2/go.mod h1:G1/Zzaj19DS25VgP9FBs36T6GlNdgQMAdbdvU/6bddo=
+github.com/flowswiss/goclient/v2 v2.0.3 h1:OynSsGDoK6S/Qi7VJJpH78oDGG9NyyFI1wOEygacpQQ=
+github.com/flowswiss/goclient/v2 v2.0.3/go.mod h1:G1/Zzaj19DS25VgP9FBs36T6GlNdgQMAdbdvU/6bddo=
 github.com/frankban/quicktest v1.14.3 h1:FJKSZTDHjyhriyC81FLQ0LY93eSai0ZyR/ZIkd3ZUKE=
 github.com/frankban/quicktest v1.14.3/go.mod h1:mgiwOwqx65TmIk1wJ6Q7wvnVMocbUorkibMOrVTHZps=
 github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 h1:+zs/tPmkDkHx3U66DAb0lQFJrpS6731Oaa12ikc+DiI=

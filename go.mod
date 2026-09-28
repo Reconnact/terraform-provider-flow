@@ -3,7 +3,7 @@ module github.com/flowswiss/terraform-provider-flow
 go 1.26
 
 require (
-	github.com/flowswiss/goclient/v2 v2.0.2
+	github.com/flowswiss/goclient/v2 v2.0.3
 	github.com/hashicorp/terraform-plugin-docs v0.25.0
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-timeouts v0.7.0

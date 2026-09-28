@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/flowswiss/goclient/v2/compute"
-	"github.com/flowswiss/goclient/v2/core"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -89,10 +88,14 @@ func (c computeElasticIPLoadBalancerAttachmentResource) Create(ctx context.Conte
 		return
 	}
 
-	body := loadBalancerElasticIPAttachBody{ElasticIPID: int(config.ElasticIPID.ValueInt64())}
+	create := compute.LoadBalancerElasticIPCreateReq{
+		LoadBalancerID: uint(config.LoadBalancerID.ValueInt64()),
+		ElasticIPID:    int(config.ElasticIPID.ValueInt64()),
+	}
 
 	err := retry(ctx, "attach elastic ip", func() error {
-		return attachLoadBalancerElasticIP(ctx, c.client.raw, int(config.LoadBalancerID.ValueInt64()), body)
+		_, err := c.client.Compute.LoadBalancerElasticIP.Create(ctx, create)
+		return err
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to attach elastic ip: %s", err))
@@ -158,7 +161,7 @@ func (c computeElasticIPLoadBalancerAttachmentResource) Delete(ctx context.Conte
 	}
 
 	err := retryDelete(ctx, "detach elastic ip", func() error {
-		return detachLoadBalancerElasticIP(ctx, c.client.raw, int(state.LoadBalancerID.ValueInt64()))
+		return c.client.Compute.LoadBalancerElasticIP.Delete(ctx, compute.LoadBalancerElasticIPDeleteReq{LoadBalancerID: uint(state.LoadBalancerID.ValueInt64())})
 	})
 	if err != nil {
 		response.Diagnostics.AddError("Client Error", fmt.Sprintf("unable to detach elastic ip: %s", err))
@@ -168,21 +171,4 @@ func (c computeElasticIPLoadBalancerAttachmentResource) Delete(ctx context.Conte
 
 func (c computeElasticIPLoadBalancerAttachmentResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
 	importStateCompositeInt64IDs(ctx, request, response, path.Root("load_balancer_id"), path.Root("elastic_ip_id"))
-}
-
-// goclient has no service for these two routes, so they go through the raw client.
-// TODO: remove these two once goclient has a LoadBalancerElasticIPService
-const computeLoadBalancersPath = "/v4/compute/load-balancers"
-
-type loadBalancerElasticIPAttachBody struct {
-	ElasticIPID int `json:"elastic_ip_id"`
-}
-
-func attachLoadBalancerElasticIP(ctx context.Context, client *core.Client, loadBalancerID int, body loadBalancerElasticIPAttachBody) error {
-	var loadBalancer compute.LoadBalancer
-	return client.Create(ctx, core.Join(computeLoadBalancersPath, loadBalancerID, "elastic-ip"), body, &loadBalancer)
-}
-
-func detachLoadBalancerElasticIP(ctx context.Context, client *core.Client, loadBalancerID int) error {
-	return client.Delete(ctx, core.Join(computeLoadBalancersPath, loadBalancerID, "elastic-ip"))
 }

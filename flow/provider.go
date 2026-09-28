@@ -290,12 +290,10 @@ func (l logTransport) transport() http.RoundTripper {
 
 type flowClient struct {
 	*goclient.Client
-	raw *core.Client
 }
 
 func newFlowClient(opts core.ClientOpts) flowClient {
-	raw := core.NewClient(opts)
-	return flowClient{Client: goclient.WithClient(raw), raw: raw}
+	return flowClient{Client: goclient.WithClient(core.NewClient(opts))}
 }
 
 func newHTTPClient() *http.Client {
