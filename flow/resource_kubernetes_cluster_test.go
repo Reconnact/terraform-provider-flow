@@ -80,9 +80,35 @@ func TestAccKubernetesCluster_Lifecycle(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
+			{
+				Config: testAccKubernetesClusterConfig(clusterName, 3, "k1.2x2") + testAccKubernetesClusterConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "id", "flow_kubernetes_cluster.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "name", "flow_kubernetes_cluster.foobar", "name"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "location_id", "flow_kubernetes_cluster.foobar", "location_id"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "network_id", "flow_kubernetes_cluster.foobar", "network_id"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "security_group_id", "flow_kubernetes_cluster.foobar", "security_group_id"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "public_address", "flow_kubernetes_cluster.foobar", "public_address"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "dns_name", "flow_kubernetes_cluster.foobar", "dns_name"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "version_id", "flow_kubernetes_cluster.foobar", "version_id"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "node_count", "flow_kubernetes_cluster.foobar", "node_count"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_id", "node_product_id", "flow_kubernetes_cluster.foobar", "node_product_id"),
+					resource.TestCheckResourceAttrPair("data.flow_kubernetes_cluster.by_name", "id", "flow_kubernetes_cluster.foobar", "id"),
+				),
+			},
 		},
 	})
 }
+
+const testAccKubernetesClusterConfigDataSource = `
+data "flow_kubernetes_cluster" "by_id" {
+	id = flow_kubernetes_cluster.foobar.id
+}
+
+data "flow_kubernetes_cluster" "by_name" {
+	name = flow_kubernetes_cluster.foobar.name
+}
+`
 
 func testAccKubernetesClusterConfig(name string, nodeCount int, nodeProduct string) string {
 	return fmt.Sprintf(`

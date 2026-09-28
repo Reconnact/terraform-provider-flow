@@ -31,6 +31,16 @@ func TestAccComputeRouterInterface_Basic(t *testing.T) {
 				ImportStateIdFunc: testAccCompositeImportID("flow_compute_router_interface.foobar", "router_id", "id"),
 				ImportStateVerify: true,
 			},
+			{
+				Config: fmt.Sprintf(testAccComputeRouterInterfaceConfigBasic, networkName, networkCIDR, routerName) + testAccComputeRouterInterfaceConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_router_interface.by_id", "id", "flow_compute_router_interface.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router_interface.by_id", "router_id", "flow_compute_router_interface.foobar", "router_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router_interface.by_id", "network_id", "flow_compute_router_interface.foobar", "network_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router_interface.by_id", "private_ip", "flow_compute_router_interface.foobar", "private_ip"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router_interface.by_network", "id", "flow_compute_router_interface.foobar", "id"),
+				),
+			},
 		},
 	})
 }
@@ -60,5 +70,17 @@ resource "flow_compute_router" "foobar" {
 resource "flow_compute_router_interface" "foobar" {
 	router_id = flow_compute_router.foobar.id
 	network_id = flow_compute_network.foobar.id
+}
+`
+
+const testAccComputeRouterInterfaceConfigDataSource = `
+data "flow_compute_router_interface" "by_id" {
+	router_id = flow_compute_router_interface.foobar.router_id
+	id        = flow_compute_router_interface.foobar.id
+}
+
+data "flow_compute_router_interface" "by_network" {
+	router_id  = flow_compute_router_interface.foobar.router_id
+	network_id = flow_compute_router_interface.foobar.network_id
 }
 `

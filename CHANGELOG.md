@@ -28,6 +28,9 @@
   No behaviour change.
 - New: terraform-plugin-framework-timeouts v0.7.0.
 - CI runs on Terraform 1.11 and on the latest release.
+- goclient v0.2.6 → v2.0.2.
+- Acceptance tests check that nothing is left after a destroy, and cover import, update and the
+  matching data source on every resource that has a test.
 
 ## Unreleased (planned as v1.1.3)
 

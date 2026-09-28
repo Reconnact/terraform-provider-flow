@@ -45,6 +45,19 @@ func TestAccComputeNetworkInterface_Basic(t *testing.T) {
 				ImportStateIdFunc: testAccCompositeImportID("flow_compute_network_interface.foobar", "server_id", "id"),
 				ImportStateVerify: true,
 			},
+			{
+				Config: server + fmt.Sprintf(testAccComputeNetworkInterfaceConfigBasic, name, "security = false") + testAccComputeNetworkInterfaceConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_network_interface.by_id", "id", "flow_compute_network_interface.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network_interface.by_id", "server_id", "flow_compute_network_interface.foobar", "server_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network_interface.by_id", "network_id", "flow_compute_network_interface.foobar", "network_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network_interface.by_id", "private_ip", "flow_compute_network_interface.foobar", "private_ip"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network_interface.by_id", "mac_address", "flow_compute_network_interface.foobar", "mac_address"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network_interface.by_id", "security_group_ids.#", "flow_compute_network_interface.foobar", "security_group_ids.#"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network_interface.by_id", "security", "flow_compute_network_interface.foobar", "security"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network_interface.by_network", "id", "flow_compute_network_interface.foobar", "id"),
+				),
+			},
 		},
 	})
 }
@@ -65,3 +78,15 @@ resource "flow_compute_network_interface" "foobar" {
 `
 
 // testAccImportStateIDFunc builds a composite import id ("42:7") from the given attributes of a resource in the state
+
+const testAccComputeNetworkInterfaceConfigDataSource = `
+data "flow_compute_network_interface" "by_id" {
+	server_id = flow_compute_network_interface.foobar.server_id
+	id        = flow_compute_network_interface.foobar.id
+}
+
+data "flow_compute_network_interface" "by_network" {
+	server_id  = flow_compute_network_interface.foobar.server_id
+	network_id = flow_compute_network_interface.foobar.network_id
+}
+`

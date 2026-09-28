@@ -54,9 +54,43 @@ func TestAccComputeLoadBalancerPool_Basic(t *testing.T) {
 				ImportStateVerify: true,
 				ImportStateIdFunc: testAccCompositeImportID("flow_compute_load_balancer_pool.foobar", "load_balancer_id", "id"),
 			},
+			{
+				Config: fmt.Sprintf(testAccComputeLoadBalancerConfigBasic, name, "10.106.0.0/24") + testAccComputeLoadBalancerPoolConfig(false) + testAccComputeLoadBalancerPoolConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "id", "flow_compute_load_balancer_pool.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "load_balancer_id", "flow_compute_load_balancer_pool.foobar", "load_balancer_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "name", "flow_compute_load_balancer_pool.foobar", "name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "balancing_algorithm_id", "flow_compute_load_balancer_pool.foobar", "balancing_algorithm_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "sticky_session", "flow_compute_load_balancer_pool.foobar", "sticky_session"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "entry_protocol_id", "flow_compute_load_balancer_pool.foobar", "entry_protocol_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "entry_port", "flow_compute_load_balancer_pool.foobar", "entry_port"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "target_protocol_id", "flow_compute_load_balancer_pool.foobar", "target_protocol_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "certificate_id", "flow_compute_load_balancer_pool.foobar", "certificate_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "health_check.type_id", "flow_compute_load_balancer_pool.foobar", "health_check.type_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "health_check.http.method", "flow_compute_load_balancer_pool.foobar", "health_check.http.method"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "health_check.http.path", "flow_compute_load_balancer_pool.foobar", "health_check.http.path"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "health_check.interval", "flow_compute_load_balancer_pool.foobar", "health_check.interval"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "health_check.timeout", "flow_compute_load_balancer_pool.foobar", "health_check.timeout"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "health_check.healthy_threshold", "flow_compute_load_balancer_pool.foobar", "health_check.healthy_threshold"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_id", "health_check.unhealthy_threshold", "flow_compute_load_balancer_pool.foobar", "health_check.unhealthy_threshold"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_pool.by_port", "id", "flow_compute_load_balancer_pool.foobar", "id"),
+				),
+			},
 		},
 	})
 }
+
+const testAccComputeLoadBalancerPoolConfigDataSource = `
+data "flow_compute_load_balancer_pool" "by_id" {
+	load_balancer_id = flow_compute_load_balancer_pool.foobar.load_balancer_id
+	id               = flow_compute_load_balancer_pool.foobar.id
+}
+
+data "flow_compute_load_balancer_pool" "by_port" {
+	load_balancer_id = flow_compute_load_balancer_pool.foobar.load_balancer_id
+	entry_port       = flow_compute_load_balancer_pool.foobar.entry_port
+}
+`
 
 func testAccComputeLoadBalancerPoolConfig(stickySession bool) string {
 	return fmt.Sprintf(`

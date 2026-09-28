@@ -32,9 +32,36 @@ func TestAccComputeLoadBalancerMember_Basic(t *testing.T) {
 				// the health check moves status on its own, nothing listens on the member's port
 				ImportStateVerifyIgnore: []string{"status"},
 			},
+			{
+				Config: testAccServerConfig(t, name, "10.107.0.0/24") + testAccComputeLoadBalancerMemberConfigBasic + testAccComputeLoadBalancerMemberConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_member.by_id", "id", "flow_compute_load_balancer_member.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_member.by_id", "pool_id", "flow_compute_load_balancer_member.foobar", "pool_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_member.by_id", "load_balancer_id", "flow_compute_load_balancer_member.foobar", "load_balancer_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_member.by_id", "name", "flow_compute_load_balancer_member.foobar", "name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_member.by_id", "address", "flow_compute_load_balancer_member.foobar", "address"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_member.by_id", "port", "flow_compute_load_balancer_member.foobar", "port"),
+					resource.TestCheckResourceAttrSet("data.flow_compute_load_balancer_member.by_id", "status"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_load_balancer_member.by_name", "id", "flow_compute_load_balancer_member.foobar", "id"),
+				),
+			},
 		},
 	})
 }
+
+const testAccComputeLoadBalancerMemberConfigDataSource = `
+data "flow_compute_load_balancer_member" "by_id" {
+	load_balancer_id = flow_compute_load_balancer_member.foobar.load_balancer_id
+	pool_id          = flow_compute_load_balancer_member.foobar.pool_id
+	id               = flow_compute_load_balancer_member.foobar.id
+}
+
+data "flow_compute_load_balancer_member" "by_name" {
+	load_balancer_id = flow_compute_load_balancer_member.foobar.load_balancer_id
+	pool_id          = flow_compute_load_balancer_member.foobar.pool_id
+	name             = flow_compute_load_balancer_member.foobar.name
+}
+`
 
 var testAccComputeLoadBalancerMemberConfigBasic = `
 resource "flow_compute_load_balancer" "foobar" {

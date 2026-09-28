@@ -47,9 +47,33 @@ func TestAccComputeNetwork_Basic(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
+			{
+				Config: fmt.Sprintf(testAccComputeNetworkConfigBasic, networkName+"-renamed", networkCIDR) + testAccComputeNetworkConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_id", "id", "flow_compute_network.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_id", "name", "flow_compute_network.foobar", "name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_id", "cidr", "flow_compute_network.foobar", "cidr"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_id", "location_id", "flow_compute_network.foobar", "location_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_id", "domain_name_servers.#", "flow_compute_network.foobar", "domain_name_servers.#"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_id", "allocation_pool.start", "flow_compute_network.foobar", "allocation_pool.start"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_id", "allocation_pool.end", "flow_compute_network.foobar", "allocation_pool.end"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_id", "gateway_ip", "flow_compute_network.foobar", "gateway_ip"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_network.by_name", "id", "flow_compute_network.foobar", "id"),
+				),
+			},
 		},
 	})
 }
+
+const testAccComputeNetworkConfigDataSource = `
+data "flow_compute_network" "by_id" {
+	id = flow_compute_network.foobar.id
+}
+
+data "flow_compute_network" "by_name" {
+	name = flow_compute_network.foobar.name
+}
+`
 
 const testAccComputeNetworkConfigBasic = `
 resource "flow_compute_network" "foobar" {

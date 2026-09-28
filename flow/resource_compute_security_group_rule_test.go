@@ -55,6 +55,22 @@ func TestAccComputeSecurityGroupRule_Basic(t *testing.T) {
 				ImportStateIdFunc: testAccCompositeImportID("flow_compute_security_group_rule.foobar_egress", "security_group_id", "id"),
 				ImportStateVerify: true,
 			},
+			{
+				Config: fmt.Sprintf(testAccComputeSecurityGroupRuleConfigBasic, securityGroupName, "foobar_egress", "egress", protocolName, fromPort, toPort, ipRange) + fmt.Sprintf(testAccComputeSecurityGroupRuleConfigDataSource, "foobar_egress"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "id", "flow_compute_security_group_rule.foobar_egress", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "security_group_id", "flow_compute_security_group_rule.foobar_egress", "security_group_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "direction", "flow_compute_security_group_rule.foobar_egress", "direction"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "protocol.number", "flow_compute_security_group_rule.foobar_egress", "protocol.number"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "protocol.name", "flow_compute_security_group_rule.foobar_egress", "protocol.name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "port_range.from", "flow_compute_security_group_rule.foobar_egress", "port_range.from"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "port_range.to", "flow_compute_security_group_rule.foobar_egress", "port_range.to"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "icmp.type", "flow_compute_security_group_rule.foobar_egress", "icmp.type"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "icmp.code", "flow_compute_security_group_rule.foobar_egress", "icmp.code"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "ip_range", "flow_compute_security_group_rule.foobar_egress", "ip_range"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "remote_security_group_id", "flow_compute_security_group_rule.foobar_egress", "remote_security_group_id"),
+				),
+			},
 		},
 	})
 }
@@ -86,6 +102,22 @@ func TestAccComputeSecurityGroupRule_ICMP(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("flow_compute_security_group_rule.foobar_icmp", "icmp.type", "0"),
 					resource.TestCheckResourceAttr("flow_compute_security_group_rule.foobar_icmp", "icmp.code", "0"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(testAccComputeSecurityGroupRuleConfigICMP, securityGroupName, 0, 0) + fmt.Sprintf(testAccComputeSecurityGroupRuleConfigDataSource, "foobar_icmp"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "id", "flow_compute_security_group_rule.foobar_icmp", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "security_group_id", "flow_compute_security_group_rule.foobar_icmp", "security_group_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "direction", "flow_compute_security_group_rule.foobar_icmp", "direction"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "protocol.number", "flow_compute_security_group_rule.foobar_icmp", "protocol.number"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "protocol.name", "flow_compute_security_group_rule.foobar_icmp", "protocol.name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "port_range.from", "flow_compute_security_group_rule.foobar_icmp", "port_range.from"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "port_range.to", "flow_compute_security_group_rule.foobar_icmp", "port_range.to"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "icmp.type", "flow_compute_security_group_rule.foobar_icmp", "icmp.type"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "icmp.code", "flow_compute_security_group_rule.foobar_icmp", "icmp.code"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "ip_range", "flow_compute_security_group_rule.foobar_icmp", "ip_range"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_security_group_rule.by_id", "remote_security_group_id", "flow_compute_security_group_rule.foobar_icmp", "remote_security_group_id"),
 				),
 			},
 		},
@@ -131,5 +163,12 @@ resource "flow_compute_security_group_rule" "%s" {
 	}
 
 	ip_range = "%s"
+}
+`
+
+const testAccComputeSecurityGroupRuleConfigDataSource = `
+data "flow_compute_security_group_rule" "by_id" {
+	id                = flow_compute_security_group_rule.%[1]s.id
+	security_group_id = flow_compute_security_group_rule.%[1]s.security_group_id
 }
 `

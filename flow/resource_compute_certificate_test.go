@@ -60,6 +60,29 @@ func TestAccComputeCertificate_Basic(t *testing.T) {
 				ImportState:     true,
 				ImportStateKind: resource.ImportBlockWithID,
 			},
+			{
+				Config: fmt.Sprintf(testAccComputeCertificateConfigBasic, certificateName, certBase64, privBase64) + testAccComputeCertificateConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "id", "flow_compute_certificate.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "name", "flow_compute_certificate.foobar", "name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "location_id", "flow_compute_certificate.foobar", "location_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.subject.common_name", "flow_compute_certificate.foobar", "info.subject.common_name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.subject.organizational_unit", "flow_compute_certificate.foobar", "info.subject.organizational_unit"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.subject.organization", "flow_compute_certificate.foobar", "info.subject.organization"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.subject.locality", "flow_compute_certificate.foobar", "info.subject.locality"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.subject.province", "flow_compute_certificate.foobar", "info.subject.province"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.subject.country", "flow_compute_certificate.foobar", "info.subject.country"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.issuer.common_name", "flow_compute_certificate.foobar", "info.issuer.common_name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.issuer.organizational_unit", "flow_compute_certificate.foobar", "info.issuer.organizational_unit"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.issuer.organization", "flow_compute_certificate.foobar", "info.issuer.organization"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.issuer.locality", "flow_compute_certificate.foobar", "info.issuer.locality"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.issuer.province", "flow_compute_certificate.foobar", "info.issuer.province"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.issuer.country", "flow_compute_certificate.foobar", "info.issuer.country"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.not_before", "flow_compute_certificate.foobar", "info.not_before"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.not_after", "flow_compute_certificate.foobar", "info.not_after"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_certificate.by_name", "info.serial_number", "flow_compute_certificate.foobar", "info.serial_number"),
+				),
+			},
 		},
 	})
 }
@@ -130,3 +153,10 @@ func pemEncode(b []byte, block string) (string, error) {
 
 	return buf.String(), nil
 }
+
+const testAccComputeCertificateConfigDataSource = `
+data "flow_compute_certificate" "by_name" {
+	name        = flow_compute_certificate.foobar.name
+	location_id = flow_compute_certificate.foobar.location_id
+}
+`

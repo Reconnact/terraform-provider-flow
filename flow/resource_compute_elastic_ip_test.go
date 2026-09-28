@@ -23,6 +23,15 @@ func TestAccComputeElasticIP_Basic(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
+			{
+				Config: testAccComputeElasticIPConfigBasic + testAccComputeElasticIPConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_elastic_ip.by_id", "id", "flow_compute_elastic_ip.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_elastic_ip.by_id", "location_id", "flow_compute_elastic_ip.foobar", "location_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_elastic_ip.by_id", "public_ip", "flow_compute_elastic_ip.foobar", "public_ip"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_elastic_ip.by_public_ip", "id", "flow_compute_elastic_ip.foobar", "id"),
+				),
+			},
 		},
 	})
 }
@@ -30,5 +39,15 @@ func TestAccComputeElasticIP_Basic(t *testing.T) {
 const testAccComputeElasticIPConfigBasic = `
 resource "flow_compute_elastic_ip" "foobar" {
 	location_id = 1
+}
+`
+
+const testAccComputeElasticIPConfigDataSource = `
+data "flow_compute_elastic_ip" "by_id" {
+	id = flow_compute_elastic_ip.foobar.id
+}
+
+data "flow_compute_elastic_ip" "by_public_ip" {
+	public_ip = flow_compute_elastic_ip.foobar.public_ip
 }
 `

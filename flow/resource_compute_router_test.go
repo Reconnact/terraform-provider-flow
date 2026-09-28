@@ -69,6 +69,17 @@ func TestAccComputeRouter_PublicOff(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
+			{
+				Config: fmt.Sprintf(testAccComputeRouterConfigBasic, "foobar", routerName, false) + testAccComputeRouterConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_router.by_id", "id", "flow_compute_router.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router.by_id", "name", "flow_compute_router.foobar", "name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router.by_id", "location_id", "flow_compute_router.foobar", "location_id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router.by_id", "public", "flow_compute_router.foobar", "public"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router.by_id", "public_ip", "flow_compute_router.foobar", "public_ip"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_router.by_name", "id", "flow_compute_router.foobar", "id"),
+				),
+			},
 		},
 	})
 }
@@ -79,5 +90,15 @@ resource "flow_compute_router" "%s" {
 	location_id = 1
 
 	public = %t
+}
+`
+
+const testAccComputeRouterConfigDataSource = `
+data "flow_compute_router" "by_id" {
+	id = flow_compute_router.foobar.id
+}
+
+data "flow_compute_router" "by_name" {
+	name = flow_compute_router.foobar.name
 }
 `

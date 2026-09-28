@@ -34,6 +34,15 @@ func TestAccComputeKeyPair_Basic(t *testing.T) {
 				// the api returns the fingerprint only, not the key
 				ImportStateVerifyIgnore: []string{"public_key"},
 			},
+			{
+				Config: fmt.Sprintf(testAccComputeKeyPairConfigBasic, keyPairName, public) + testAccComputeKeyPairConfigDataSource,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair("data.flow_compute_key_pair.by_id", "id", "flow_compute_key_pair.foobar", "id"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_key_pair.by_id", "name", "flow_compute_key_pair.foobar", "name"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_key_pair.by_id", "fingerprint", "flow_compute_key_pair.foobar", "fingerprint"),
+					resource.TestCheckResourceAttrPair("data.flow_compute_key_pair.by_name", "id", "flow_compute_key_pair.foobar", "id"),
+				),
+			},
 		},
 	})
 }
@@ -42,5 +51,15 @@ const testAccComputeKeyPairConfigBasic = `
 resource "flow_compute_key_pair" "foobar" {
 	name        = "%s"
 	public_key  = "%s"
+}
+`
+
+const testAccComputeKeyPairConfigDataSource = `
+data "flow_compute_key_pair" "by_id" {
+	id = flow_compute_key_pair.foobar.id
+}
+
+data "flow_compute_key_pair" "by_name" {
+	name = flow_compute_key_pair.foobar.name
 }
 `
